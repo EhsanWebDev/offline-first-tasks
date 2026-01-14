@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "themeName": "Antigravity Modern",
+    "vibes": ["Clean", "Soft", "Pastel", "Rounded"]
+  },
+  "colors": {
+    "core": {
+      "background": "#FFFFFF",
+      "surface": "#F3F4F6",
+      "primary": "#0F172A",
+      "textMain": "#1E293B",
+      "textMuted": "#94A3B8"
+    },
+    "accents": {
+      "blueCard": "#E0F2FE",
+      "orangeCard": "#FFEDD5",
+      "pinkCard": "#FCE7F3"
+    },
+    "priorities": {
+      "high": { "bg": "#3B82F6", "text": "#FFFFFF", "label": "Blue" },
+      "medium": { "bg": "#F43F5E", "text": "#FFFFFF", "label": "Red/Pink" },
+      "low": { "bg": "#F59E0B", "text": "#FFFFFF", "label": "Orange" }
+    }
+  },
+  "typography": {
+    "fontFamily": "System (San Francisco/Roboto) or Poppins",
+    "sizes": {
+      "h1": 24,
+      "h2": 20,
+      "body": 16,
+      "caption": 12
+    },
+    "weights": {
+      "bold": "700",
+      "semiBold": "600",
+      "regular": "400"
+    }
+  },
+  "components": {
+    "input": {
+      "backgroundColor": "#F3F4F6",
+      "borderRadius": 16,
+      "padding": 16,
+      "placeholderColor": "#94A3B8",
+      "iconColor": "#9CA3AF"
+    },
+    "button": {
+      "backgroundColor": "#0F172A",
+      "borderRadius": 30,
+      "height": 56,
+      "textColor": "#FFFFFF",
+      "shadow": "0px 4px 12px rgba(15, 23, 42, 0.2)"
+    },
+    "cards": {
+      "borderRadius": 24,
+      "padding": 20,
+      "shadow": "none"
+    },
+    "tags": {
+      "borderRadius": 20,
+      "paddingVertical": 8,
+      "paddingHorizontal": 16,
+      "activeOpacity": 1.0,
+      "inactiveOpacity": 0.5
+    }
+  }
+}

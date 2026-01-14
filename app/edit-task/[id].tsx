@@ -1,0 +1,470 @@
+import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
+import { useTaskById } from "@/api/tasks/queries";
+import { Priority } from "@/components/PriorityTag";
+import { PRIORITY_COLORS } from "@/constants/colors";
+import { formatDate } from "@/utils/dateHelpers";
+import { deleteImageFromSupabase, uploadImageToSupabase } from "@/utils/imageUpload";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import {
+  AlignLeft,
+  Calendar,
+  ChevronLeft,
+  ClipboardList,
+  ImagePlus,
+  Save,
+  Trash2,
+  X
+} from "lucide-react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  // Image,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+export default function EditTaskScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams();
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<Priority>("medium");
+
+  // State is number (milliseconds) or null
+  const [dueDate, setDueDate] = useState<number | null>(null);
+
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const [errors, setErrors] = useState<{ title?: string }>({});
+  const { mutate: updateTaskMutation, isPending } = useUpdateTask();
+
+  const { data: theTask, isLoading: isTaskLoading } = useTaskById(id as string);
+
+  // Extract is_completed to preserve it during update
+  const is_completed = theTask?.[0]?.is_completed ?? false;
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  const { mutate: removeTaskMutation, isPending: isRemoveTaskPending } =
+    useDeleteTask();
+
+  useEffect(() => {
+    if (theTask && !isTaskLoading) {
+      setTitle(theTask[0].title || "");
+      setDescription(theTask[0].description || "");
+      setPriority((theTask[0].priority as Priority) || "medium");
+      setDueDate(theTask[0].due_date ?? null);
+      setImageUrl(theTask[0].image_url ?? null);
+    }
+  }, [theTask, isTaskLoading]);
+
+  const handleUpdate = async () => {
+    let imageUrlFromSupabase = null;
+    if (imageUrl) {
+      imageUrlFromSupabase = await uploadImageToSupabase(imageUrl);
+    }
+    updateTaskMutation(
+      {
+        id: id as string,
+        title: title.trim(),
+        description: description?.trim(),
+      priority: priority,
+      due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+      is_completed: is_completed,
+      image_url: imageUrlFromSupabase ?? undefined,
+    },
+    {
+      onSuccess: () => {
+        router.back();
+      },
+      onError: (error) => {
+        console.error(error);
+        Alert.alert("Error", (error as Error).message);
+      },
+    });
+  };
+
+  const handleDelete = () => {
+    Alert.alert("Delete Task", "Are you sure you want to delete this task?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          removeTaskMutation(id as string, {
+            onSuccess: async() => {
+              if (imageUrl) {
+                const deleted = await deleteImageFromSupabase(imageUrl);
+                if (deleted) {
+                  setImageUrl(null);
+                }
+              }
+              router.back();
+            },
+            onError: (error) => {
+              console.error(error);
+              Alert.alert("Error", (error as Error).message);
+            },
+          });
+        },
+      },
+    ]);
+  };
+  // Handler for Android Date Picker
+  const onAndroidDateChange = (
+    event: DateTimePickerEvent,
+    selectedDate?: Date
+  ) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      // Store as milliseconds
+      setDueDate(selectedDate.getTime());
+    }
+  };
+
+  // Handler for iOS Date Picker
+  const onIOSDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (selectedDate) {
+      // Store as milliseconds
+      setDueDate(selectedDate.getTime());
+    }
+  };
+
+  const handleChangeImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission needed", "We need access to your photos");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images', 
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (!result.canceled) {
+      // delete the old image from supabase
+      if (imageUrl) {
+        const deleted = await deleteImageFromSupabase(imageUrl);
+        if (deleted) {
+          setImageUrl(null);
+        }
+      }
+      const imageUrlFromSupabase = await uploadImageToSupabase(result.assets[0].uri);
+      setImageUrl(imageUrlFromSupabase);
+      updateTaskMutation(
+        {
+          id: id as string,
+          image_url: imageUrlFromSupabase ?? undefined,
+          title: title.trim(),
+          description: description?.trim(),
+          priority: priority,
+          due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+          is_completed: is_completed,
+        },
+        {
+          onSuccess: () => {
+            router.back();
+          },  
+          onError: (error) => {
+            console.error(error);
+            Alert.alert("Error", (error as Error).message);
+          },
+        }
+      );
+    }
+    
+  };
+
+  if (isTaskLoading) {
+    return (
+      <SafeAreaView className="flex-1">
+        <Stack.Screen options={{ headerShown: false }} />
+        <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
+          <View className="flex-row items-center flex-1">
+            <TouchableOpacity onPress={() => router.back()} className="mr-4">
+              <ChevronLeft size={28} color="#1E293B" />
+            </TouchableOpacity>
+            <Text className="text-xl font-semibold text-gray-900">
+              Edit Task
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleDelete}
+            disabled={isRemoveTaskPending}
+            className="p-2"
+          >
+            {isRemoveTaskPending ? (
+              <ActivityIndicator color="#EF4444" />
+            ) : (
+              <Trash2 size={22} color="#EF4444" />
+            )}
+          </TouchableOpacity>
+        </View>
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#4F46E5" />
+          <Text className="text-gray-400 text-lg">Loading your task...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-white">
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView className="flex-1">
+        {/* Header */}
+        <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
+          <View className="flex-row items-center flex-1">
+            <TouchableOpacity onPress={() => router.back()} className="mr-4">
+              <ChevronLeft size={28} color="#1E293B" />
+            </TouchableOpacity>
+            <Text className="text-xl font-semibold text-gray-900">
+              Edit Task
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleDelete}
+            disabled={isRemoveTaskPending}
+            className="p-2"
+          >
+            {isRemoveTaskPending ? (
+              <ActivityIndicator color="#EF4444" />
+            ) : (
+              <Trash2 size={22} color="#EF4444" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          className="flex-1 px-6 pt-6"
+          contentContainerStyle={{ paddingBottom: 100 }}
+        >
+          {/* Project Title */}
+          <View className="mb-6">
+            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+              Project Title
+            </Text>
+            <View
+              className={`flex-row items-center bg-gray-100 rounded-2xl px-4 h-12 ${
+                errors.title ? "border border-red-500" : ""
+              }`}
+            >
+              <ClipboardList size={20} color="#94A3B8" />
+              <TextInput
+                className="flex-1 ml-3 text-base text-gray-900 py-0"
+                placeholder="Enter task title"
+                placeholderTextColor="#94A3B8"
+                value={title}
+                onChangeText={(t) => {
+                  setTitle(t);
+                  if (errors.title) setErrors({});
+                }}
+              />
+            </View>
+            {errors.title && (
+              <Text className="text-red-500 text-xs mt-1 ml-1">
+                {errors.title}
+              </Text>
+            )}
+          </View>
+
+          {/* Description */}
+          <View className="mb-6">
+            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+              Description
+            </Text>
+            <View className="flex-row items-start bg-gray-100 rounded-2xl p-4 h-32">
+              <AlignLeft size={20} color="#94A3B8" />
+              <TextInput
+                className="flex-1 ml-3 text-base text-gray-900 pt-0"
+                placeholder="Enter task description"
+                placeholderTextColor="#94A3B8"
+                multiline
+                textAlignVertical="top"
+                value={description}
+                onChangeText={setDescription}
+              />
+            </View>
+          </View>
+
+          {/* Due Date */}
+          <View className="mb-6">
+            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+              Due Date (Optional)
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14"
+            >
+              <Calendar size={20} color="#94A3B8" />
+              <Text
+                className={`flex-1 ml-3 text-base ${
+                  dueDate ? "text-gray-900" : "text-gray-400"
+                }`}
+              >
+                {dueDate ? formatDate(dueDate) : "Select due date"}
+              </Text>
+
+              {/* Clear Button */}
+              {dueDate && (
+                <TouchableOpacity
+                  onPress={() => setDueDate(null)}
+                  className="p-1"
+                >
+                  <X size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+            {showDatePicker && Platform.OS === "android" && (
+              <DateTimePicker
+                value={dueDate ? new Date(dueDate) : new Date()}
+                mode="date"
+                display="default"
+                onChange={onAndroidDateChange}
+              />
+            )}
+          </View>
+
+          {/* Priority */}
+          <View className="mb-8">
+            <Text className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
+              Priority Level
+            </Text>
+            <View className="flex-row justify-between">
+              {(["low", "medium", "high"] as Priority[]).map((p) => {
+                const colors = PRIORITY_COLORS[p];
+                const isSelected = priority === p;
+
+                return (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setPriority(p)}
+                    activeOpacity={0.7}
+                    className="flex-1 mx-1 h-14 rounded-2xl items-center justify-center border-2"
+                    style={{
+                      backgroundColor: isSelected ? colors.lightBg : "#F9FAFB",
+                      borderColor: isSelected ? colors.solid : "transparent",
+                    }}
+                  >
+                    <View className="flex-row items-center">
+                      <View
+                        className="w-2 h-2 rounded-full mr-2"
+                        style={{ backgroundColor: colors.solid }}
+                      />
+                      <Text
+                        className="font-bold capitalize text-base"
+                        style={{ color: isSelected ? colors.solid : "#4B5563" }}
+                      >
+                        {p}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+          {/* Image */}
+          <View className="mb-6">
+            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+              Image (Optional)
+            </Text>
+            {imageUrl && (
+              <TouchableOpacity onPress={handleChangeImage} className="flex-row items-center bg-gray-100 rounded-2xl  h-64 justify-center">
+                 <Image source={{ uri: imageUrl }} style={{ width: "100%", height: "100%", borderRadius: 10, resizeMode: "cover" }} />
+                </TouchableOpacity>
+              
+            )}
+            {!imageUrl && (
+              <TouchableOpacity onPress={handleChangeImage} className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14">
+                <ImagePlus size={20} color="#94A3B8" />
+                <Text className="text-base text-gray-900 ml-3">
+                  Add Image
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* iOS Date Picker Modal */}
+        {Platform.OS === "ios" && (
+          <Modal
+            transparent={true}
+            animationType="slide"
+            visible={showDatePicker}
+            onRequestClose={() => setShowDatePicker(false)}
+          >
+            <View className="flex-1 justify-end bg-black/50">
+              <View className="bg-white rounded-t-3xl p-4 pb-8">
+                <View className="flex-row justify-between items-center mb-4">
+                  <Text className="text-lg font-bold text-gray-900">
+                    Select Date
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowDatePicker(false)}
+                    className="p-2 bg-gray-100 rounded-full"
+                  >
+                    <X size={20} color="#374151" />
+                  </TouchableOpacity>
+                </View>
+                <DateTimePicker
+                  value={dueDate ? new Date(dueDate) : new Date()}
+                  mode="date"
+                  display="inline"
+                  onChange={onIOSDateChange}
+                  style={{ height: 320 }}
+                  textColor="#000000"
+                  themeVariant="light"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  className="mt-4 w-full bg-slate-900 py-4 rounded-xl items-center"
+                >
+                  <Text className="text-white font-bold text-lg">Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {/* Update Button */}
+        <View className="absolute bottom-6 left-6 right-6">
+          <TouchableOpacity
+            onPress={handleUpdate}
+            disabled={isPending}
+            className={`w-full h-14 bg-slate-900 rounded-full flex-row items-center justify-center shadow-lg ${
+              isPending ? "opacity-80" : ""
+            }`}
+          >
+            {isPending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <>
+                <Save
+                  size={24}
+                  color="white"
+                  strokeWidth={2.5}
+                  className="mr-2"
+                />
+                <Text className="text-white font-bold text-lg">
+                  Update Task
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
