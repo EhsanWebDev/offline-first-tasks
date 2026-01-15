@@ -34,6 +34,8 @@ export default function HomeScreen() {
     refetch: refetchTasks,
   } = useTasks();
 
+  console.log("tasks", tasks);
+
   const { mutate: updateTaskMutation } = useUpdateTask();
 
   const onRefresh = useCallback(() => {
@@ -90,6 +92,31 @@ export default function HomeScreen() {
     [tasks]
   );
 
+  const renderItem = ({ item, index }: { item: Task; index: number }) => {
+    return (
+      <Animated.View
+        entering={FadeInDown.delay(index * 100).springify()}
+        layout={FadeInDown.springify()}
+      >
+        <TaskCard
+          title={item.title}
+          description={item.description ?? ""}
+          isCompleted={item.is_completed}
+          priority={item.priority as Priority}
+          commentsCount={item.task_comments?.[0]?.count ?? 0}
+          createdAt={
+            item.created_at ? new Date(item.created_at).getTime() : undefined
+          }
+          dueDate={
+            item.due_date ? new Date(item.due_date).getTime() : undefined
+          }
+          onToggle={() => handleToggleTask(item)}
+          onPress={() => router.push(`/edit-task/${item.id}`)}
+        />
+      </Animated.View>
+    );
+  };
+
   return (
     <SafeAreaView
       className="flex-1 bg-gray-50"
@@ -119,23 +146,7 @@ export default function HomeScreen() {
           <FlatList
             data={filteredTasks}
             keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <Animated.View
-                entering={FadeInDown.delay(index * 100).springify()}
-                layout={FadeInDown.springify()}
-              >
-                <TaskCard
-                  title={item.title}
-                  description={item.description ?? ""}
-                  isCompleted={item.is_completed}
-                  priority={item.priority as Priority}
-                  createdAt={item.created_at}
-                  dueDate={item.due_date ?? undefined}
-                  onToggle={() => handleToggleTask(item)}
-                  onPress={() => router.push(`/edit-task/${item.id}`)}
-                />
-              </Animated.View>
-            )}
+            renderItem={renderItem}
             ListEmptyComponent={
               <View className="flex-1 justify-center items-center mt-20">
                 <Text className="text-gray-400 text-lg">

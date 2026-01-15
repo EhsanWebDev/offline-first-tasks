@@ -3,7 +3,7 @@ import { supabase } from "@/utils/supabase";
 export const getTasks = async () => {
   const { data, error } = await supabase
     .from("tasks")
-    .select("*")
+    .select("*, task_comments(count)")
     .order("created_at", { ascending: false });
   if (error) {
     throw error;

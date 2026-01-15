@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { Check, Calendar } from "lucide-react-native";
+import { Calendar, Check, MessageCircle } from "lucide-react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import { PRIORITY_COLORS } from "../constants/colors";
 import { formatDate } from "../utils/dateHelpers";
 
@@ -14,6 +14,7 @@ interface TaskCardProps {
   onPress?: () => void;
   createdAt?: number;
   dueDate?: number;
+  commentsCount?: number;
 }
 
 export default function TaskCard({
@@ -25,6 +26,7 @@ export default function TaskCard({
   onPress,
   createdAt,
   dueDate,
+  commentsCount = 0,
 }: TaskCardProps) {
   const colors =
     PRIORITY_COLORS[priority?.toLowerCase() as Priority] ||
@@ -34,8 +36,8 @@ export default function TaskCard({
   const dateStr = dueDate
     ? formatDate(new Date(dueDate))
     : createdAt
-      ? formatDate(new Date(createdAt))
-      : "Today";
+    ? formatDate(new Date(createdAt))
+    : "Today";
 
   return (
     <TouchableOpacity
@@ -86,13 +88,23 @@ export default function TaskCard({
 
       <View className="flex-row items-center justify-between mt-2">
         {/* Priority Pill */}
-        <View className="bg-white/80 px-4 py-2 rounded-xl">
-          <Text
-            className="font-bold capitalize"
-            style={{ color: colors.solid }}
-          >
-            {priority}
-          </Text>
+        <View className="flex-row items-center gap-2">
+          <View className="bg-white/80 px-4 py-2 rounded-xl">
+            <Text
+              className="font-bold capitalize"
+              style={{ color: colors.solid }}
+            >
+              {priority}
+            </Text>
+          </View>
+          {commentsCount > 0 && (
+            <View className="flex-row items-center gap-1 bg-white/80 px-4 py-2 rounded-xl">
+              <MessageCircle size={14} color="#000" />
+              <Text className="font-bold text-xs text-gray-900">
+                {commentsCount}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Date */}

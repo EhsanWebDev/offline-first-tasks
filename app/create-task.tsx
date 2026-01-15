@@ -1,17 +1,10 @@
 import { useCreateTask } from "@/api/tasks/mutations";
+import AppInput from "@/components/TextInput/AppInput";
 import { uploadImageToSupabase } from "@/utils/imageUpload";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import {
-  AlignLeft,
-  Calendar,
-  ChevronLeft,
-  ClipboardList,
-  ImagePlus,
-  Plus,
-  X,
-} from "lucide-react-native";
+import { Calendar, ChevronLeft, ImagePlus, Plus, X } from "lucide-react-native";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -20,7 +13,6 @@ import {
   Platform,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -36,15 +28,17 @@ export default function CreateTaskScreen() {
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
- 
+
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string }>({});
+  const [errors, setErrors] = useState<{
+    title?: string;
+    description?: string;
+  }>({});
 
   const { mutate: createTaskMutation, isPending } = useCreateTask();
 
-
-const pickImage = async () => {
+  const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== "granted") {
       Alert.alert("Permission needed", "We need access to your photos");
@@ -52,7 +46,7 @@ const pickImage = async () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images', 
+      mediaTypes: "images",
       allowsEditing: true,
       quality: 0.7,
     });
@@ -68,7 +62,6 @@ const pickImage = async () => {
       return;
     }
 
-
     setErrors({});
 
     try {
@@ -76,24 +69,24 @@ const pickImage = async () => {
         setUploading(true);
         const imageUrlFromSupabase = await uploadImageToSupabase(imageUri);
 
-          createTaskMutation(
-        {
-          title: title.trim(),
-          description: description.trim(),
-          priority: priority as "low" | "medium" | "high",
-          due_date: dueDate ? dueDate.toISOString() : undefined,
-          image_url: imageUrlFromSupabase,
-        },
-        {
-          onSuccess: () => {
-            router.back();
+        createTaskMutation(
+          {
+            title: title.trim(),
+            description: description.trim(),
+            priority: priority as "low" | "medium" | "high",
+            due_date: dueDate ? dueDate.toISOString() : undefined,
+            image_url: imageUrlFromSupabase,
           },
-          onError: (error) => {
-            console.error(error);
-            Alert.alert("Error", (error as Error).message);
-          },
-        }
-      );
+          {
+            onSuccess: () => {
+              router.back();
+            },
+            onError: (error) => {
+              console.error(error);
+              Alert.alert("Error", (error as Error).message);
+            },
+          }
+        );
       }
     } catch (error) {
       console.error(error);
@@ -101,8 +94,6 @@ const pickImage = async () => {
     } finally {
       setUploading(false);
     }
-
-   
   };
 
   const onDateChange = (selectedDate?: Date) => {
@@ -130,52 +121,33 @@ const pickImage = async () => {
           contentContainerStyle={{ paddingBottom: 100 }}
         >
           {/* Project Title */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Project Title
-            </Text>
-            <View
-              className={`flex-row items-center bg-gray-100 rounded-2xl px-4 h-14 ${
-                errors.title ? "border border-red-500" : ""
-              }`}
-            >
-              <ClipboardList size={20} color="#94A3B8" />
-              <TextInput
-                className="flex-1 ml-3 text-base text-gray-900 py-0"
-                placeholder="Enter task title"
-                placeholderTextColor="#94A3B8"
-                value={title}
-                onChangeText={(t) => {
-                  setTitle(t);
-                  if (errors.title) setErrors({});
-                }}
-              />
-            </View>
-            {errors.title && (
-              <Text className="text-red-500 text-xs mt-1 ml-1">
-                {errors.title}
-              </Text>
-            )}
-          </View>
 
+          <AppInput
+            label="Title"
+            value={title}
+            onChangeText={(t) => {
+              setTitle(t);
+              if (errors.title) setErrors({});
+            }}
+            placeholder="Enter task title"
+            placeholderTextColor="#94A3B8"
+            error={errors.title ? "Title is required" : undefined}
+          />
+          <View className="mb-6" />
           {/* Description */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Description
-            </Text>
-            <View className="flex-row items-start bg-gray-100 rounded-2xl p-4 h-32">
-              <AlignLeft size={20} color="#94A3B8" />
-              <TextInput
-                className="flex-1 ml-3 text-base text-gray-900 pt-0"
-                placeholder="Enter task description"
-                placeholderTextColor="#94A3B8"
-                multiline
-                textAlignVertical="top"
-                value={description}
-                onChangeText={setDescription}
-              />
-            </View>
-          </View>
+
+          <AppInput
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Enter task description"
+            placeholderTextColor="#94A3B8"
+            error={errors.description ? "Description is required" : undefined}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <View className="mb-6" />
 
           {/* Due Date */}
           <View className="mb-6">
@@ -250,7 +222,10 @@ const pickImage = async () => {
             <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
               Image (Optional)
             </Text>
-            <TouchableOpacity onPress={pickImage} className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14">
+            <TouchableOpacity
+              onPress={pickImage}
+              className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14"
+            >
               <ImagePlus size={20} color="#94A3B8" />
               <Text className="text-base text-gray-900 ml-3">
                 {imageUri ? "Change Image" : "Add Image"}
@@ -324,7 +299,6 @@ const pickImage = async () => {
                 <Text className="text-white font-bold text-lg">
                   {uploading ? "Uploading..." : "Create Task"}
                 </Text>
-               
               </>
             )}
           </TouchableOpacity>

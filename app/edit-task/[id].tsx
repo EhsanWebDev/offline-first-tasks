@@ -1,24 +1,27 @@
+import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
 import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
 import { useTaskById } from "@/api/tasks/queries";
 import { Priority } from "@/components/PriorityTag";
+import AppInput from "@/components/TextInput/AppInput";
 import { PRIORITY_COLORS } from "@/constants/colors";
 import { formatDate } from "@/utils/dateHelpers";
-import { deleteImageFromSupabase, uploadImageToSupabase } from "@/utils/imageUpload";
+import {
+  deleteImageFromSupabase,
+  uploadImageToSupabase,
+} from "@/utils/imageUpload";
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
-  AlignLeft,
   Calendar,
   ChevronLeft,
-  ClipboardList,
-  ImagePlus,
+  ImageIcon,
+  MessageCircle,
   Save,
   Trash2,
-  X
+  X,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
@@ -27,9 +30,9 @@ import {
   // Image,
   Modal,
   Platform,
+  Pressable,
   ScrollView,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -38,18 +41,22 @@ export default function EditTaskScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
 
+  const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
-
-  // State is number (milliseconds) or null
   const [dueDate, setDueDate] = useState<number | null>(null);
-
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [errors, setErrors] = useState<{
+    title?: string;
+    description?: string;
+  }>({});
 
-  const [errors, setErrors] = useState<{ title?: string }>({});
+  const { data: comments } = useTaskCommentsByTaskId(Number(id));
+
+  const commentsCount = comments?.length ?? 0;
+  const hasComments = commentsCount > 0;
   const { mutate: updateTaskMutation, isPending } = useUpdateTask();
-
   const { data: theTask, isLoading: isTaskLoading } = useTaskById(id as string);
 
   // Extract is_completed to preserve it during update
@@ -70,6 +77,7 @@ export default function EditTaskScreen() {
   }, [theTask, isTaskLoading]);
 
   const handleUpdate = async () => {
+    setIsLoading(true);
     let imageUrlFromSupabase = null;
     if (imageUrl) {
       imageUrlFromSupabase = await uploadImageToSupabase(imageUrl);
@@ -79,20 +87,24 @@ export default function EditTaskScreen() {
         id: id as string,
         title: title.trim(),
         description: description?.trim(),
-      priority: priority,
-      due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
-      is_completed: is_completed,
-      image_url: imageUrlFromSupabase ?? undefined,
-    },
-    {
-      onSuccess: () => {
-        router.back();
+        priority: priority,
+        due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+        is_completed: is_completed,
+        image_url: imageUrlFromSupabase ?? undefined,
       },
-      onError: (error) => {
-        console.error(error);
-        Alert.alert("Error", (error as Error).message);
-      },
-    });
+      {
+        onSuccess: () => {
+          setIsLoading(false);
+          router.back();
+        },
+        onError: (error) => {
+          console.error(error);
+          Alert.alert("Error", (error as Error).message);
+          setIsLoading(false);
+        },
+      }
+    );
+    setIsLoading(false);
   };
 
   const handleDelete = () => {
@@ -103,7 +115,7 @@ export default function EditTaskScreen() {
         style: "destructive",
         onPress: async () => {
           removeTaskMutation(id as string, {
-            onSuccess: async() => {
+            onSuccess: async () => {
               if (imageUrl) {
                 const deleted = await deleteImageFromSupabase(imageUrl);
                 if (deleted) {
@@ -148,7 +160,7 @@ export default function EditTaskScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images', 
+      mediaTypes: "images",
       allowsEditing: false,
       quality: 1,
     });
@@ -160,7 +172,9 @@ export default function EditTaskScreen() {
           setImageUrl(null);
         }
       }
-      const imageUrlFromSupabase = await uploadImageToSupabase(result.assets[0].uri);
+      const imageUrlFromSupabase = await uploadImageToSupabase(
+        result.assets[0].uri
+      );
       setImageUrl(imageUrlFromSupabase);
       updateTaskMutation(
         {
@@ -175,7 +189,7 @@ export default function EditTaskScreen() {
         {
           onSuccess: () => {
             router.back();
-          },  
+          },
           onError: (error) => {
             console.error(error);
             Alert.alert("Error", (error as Error).message);
@@ -183,7 +197,6 @@ export default function EditTaskScreen() {
         }
       );
     }
-    
   };
 
   if (isTaskLoading) {
@@ -251,53 +264,31 @@ export default function EditTaskScreen() {
           contentContainerStyle={{ paddingBottom: 100 }}
         >
           {/* Project Title */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Project Title
-            </Text>
-            <View
-              className={`flex-row items-center bg-gray-100 rounded-2xl px-4 h-12 ${
-                errors.title ? "border border-red-500" : ""
-              }`}
-            >
-              <ClipboardList size={20} color="#94A3B8" />
-              <TextInput
-                className="flex-1 ml-3 text-base text-gray-900 py-0"
-                placeholder="Enter task title"
-                placeholderTextColor="#94A3B8"
-                value={title}
-                onChangeText={(t) => {
-                  setTitle(t);
-                  if (errors.title) setErrors({});
-                }}
-              />
-            </View>
-            {errors.title && (
-              <Text className="text-red-500 text-xs mt-1 ml-1">
-                {errors.title}
-              </Text>
-            )}
-          </View>
+          <AppInput
+            label="Title"
+            value={title}
+            onChangeText={(t) => {
+              setTitle(t);
+              if (errors.title) setErrors({});
+            }}
+            placeholder="Enter task title"
+            placeholderTextColor="#94A3B8"
+            error={errors.title ? "Title is required" : undefined}
+          />
+          <View className="mb-6" />
 
           {/* Description */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Description
-            </Text>
-            <View className="flex-row items-start bg-gray-100 rounded-2xl p-4 h-32">
-              <AlignLeft size={20} color="#94A3B8" />
-              <TextInput
-                className="flex-1 ml-3 text-base text-gray-900 pt-0"
-                placeholder="Enter task description"
-                placeholderTextColor="#94A3B8"
-                multiline
-                textAlignVertical="top"
-                value={description}
-                onChangeText={setDescription}
-              />
-            </View>
-          </View>
-
+          <AppInput
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Enter task description"
+            placeholderTextColor="#94A3B8"
+            error={errors.description ? "Description is required" : undefined}
+            multiline
+            textAlignVertical="top"
+          />
+          <View className="mb-6" />
           {/* Due Date */}
           <View className="mb-6">
             <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
@@ -375,25 +366,69 @@ export default function EditTaskScreen() {
               })}
             </View>
           </View>
-          {/* Image */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Image (Optional)
-            </Text>
-            {imageUrl && (
-              <TouchableOpacity onPress={handleChangeImage} className="flex-row items-center bg-gray-100 rounded-2xl  h-64 justify-center">
-                 <Image source={{ uri: imageUrl }} style={{ width: "100%", height: "100%", borderRadius: 10, resizeMode: "cover" }} />
-                </TouchableOpacity>
-              
-            )}
-            {!imageUrl && (
-              <TouchableOpacity onPress={handleChangeImage} className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14">
-                <ImagePlus size={20} color="#94A3B8" />
-                <Text className="text-base text-gray-900 ml-3">
-                  Add Image
-                </Text>
+          {/* Media and Comments */}
+          <View className="flex-row justify-between gap-4">
+            <View className="flex-1 mb-6">
+              <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Media (Optional)
+              </Text>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/edit-task/task-media",
+                    params: { id },
+                  })
+                }
+                className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14"
+              >
+                <ImageIcon size={20} color="#94A3B8" />
+                <Text className="text-base text-gray-900 ml-3">Add Media</Text>
+              </Pressable>
+              {/* {imageUrl && (
+              <TouchableOpacity
+                onPress={handleChangeImage}
+                className="flex-row items-center bg-gray-100 rounded-2xl  h-64 justify-center"
+              >
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: 10,
+                    resizeMode: "cover",
+                  }}
+                />
               </TouchableOpacity>
             )}
+            {!imageUrl && (
+              <TouchableOpacity
+                onPress={handleChangeImage}
+                className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14"
+              >
+                <ImagePlus size={20} color="#94A3B8" />
+                <Text className="text-base text-gray-900 ml-3">Add Image</Text>
+              </TouchableOpacity>
+            )} */}
+            </View>
+            <View className="flex-1 mb-6">
+              <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                Comments {hasComments ? `(${commentsCount})` : ""}
+              </Text>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/edit-task/task-comments",
+                    params: { id },
+                  })
+                }
+                className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14 justify-center"
+              >
+                <MessageCircle size={20} color="#94A3B8" />
+                <Text className="text-base text-gray-900 ml-3">
+                  Add Comments
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
 
@@ -442,12 +477,12 @@ export default function EditTaskScreen() {
         <View className="absolute bottom-6 left-6 right-6">
           <TouchableOpacity
             onPress={handleUpdate}
-            disabled={isPending}
+            disabled={isPending || isLoading}
             className={`w-full h-14 bg-slate-900 rounded-full flex-row items-center justify-center shadow-lg ${
-              isPending ? "opacity-80" : ""
+              isPending || isLoading ? "opacity-80" : ""
             }`}
           >
-            {isPending ? (
+            {isPending || isLoading ? (
               <ActivityIndicator color="white" />
             ) : (
               <>
