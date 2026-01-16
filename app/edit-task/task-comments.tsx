@@ -26,6 +26,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TaskComments = () => {
@@ -103,66 +104,68 @@ const TaskComments = () => {
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView className="flex-1">
         <Header title="Task Comments" onBackPress={() => router.back()} />
-        <ScrollView
-          className="flex-1 px-6 pt-6"
-          refreshControl={
-            <RefreshControl
-              refreshing={isCommentsLoading}
-              onRefresh={refetchComments}
-              tintColor="#4F46E5"
-              colors={["#4F46E5"]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {comments?.length === 0 ? (
-            <View className="flex-1 justify-center items-center">
-              <Text className="text-gray-400 text-lg">No comments yet</Text>
-            </View>
-          ) : (
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                Comments
-              </Text>
-              {comments?.map((comment) => (
-                <CommentItem
-                  key={comment.id}
-                  comment={comment.content}
-                  createdAt={comment.created_at}
-                  commentId={comment.id}
-                  onDeleteComment={(commentId) =>
-                    handleDeleteComment(commentId)
-                  }
-                  isDeletingComment={isDeletingComment}
-                />
-              ))}
-            </View>
-          )}
-        </ScrollView>
-        {/* Footer */}
-        <View className="px-6 pb-6 flex-row items-center justify-between gap-4">
-          {/* Submit when the user presses the send key */}
-          <TextInput
-            placeholder="Add a comment"
-            className="border border-gray-300 rounded-2xl py-3 px-4 flex-1 text-base  placeholder:text-gray-400"
-            value={comment}
-            onChangeText={setComment}
-            onSubmitEditing={handleAddComment}
-            textAlignVertical="top"
-            submitBehavior="submit"
-            multiline
-          />
-          <TouchableOpacity
-            className="bg-gray-900 rounded-full h-12 w-12 flex-row items-center justify-center"
-            onPress={handleAddComment}
+        <KeyboardAvoidingView behavior="padding" className="flex-1">
+          <ScrollView
+            className="flex-1 px-6 pt-6"
+            refreshControl={
+              <RefreshControl
+                refreshing={isCommentsLoading}
+                onRefresh={refetchComments}
+                tintColor="#4F46E5"
+                colors={["#4F46E5"]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
           >
-            {isAddingComment ? (
-              <ActivityIndicator size="small" color="white" />
+            {comments?.length === 0 ? (
+              <View className="flex-1 justify-center items-center">
+                <Text className="text-gray-400 text-lg">No comments yet</Text>
+              </View>
             ) : (
-              <Send size={20} color="white" />
+              <View className="flex-1">
+                <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
+                  Comments
+                </Text>
+                {comments?.map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment.content}
+                    createdAt={comment.created_at}
+                    commentId={comment.id}
+                    onDeleteComment={(commentId) =>
+                      handleDeleteComment(commentId)
+                    }
+                    isDeletingComment={isDeletingComment}
+                  />
+                ))}
+              </View>
             )}
-          </TouchableOpacity>
-        </View>
+          </ScrollView>
+          {/* Footer */}
+          <View className="px-6 pb-6 flex-row items-center justify-between gap-4">
+            {/* Submit when the user presses the send key */}
+            <TextInput
+              placeholder="Add a comment"
+              className="border border-gray-300 rounded-2xl py-3 px-4 flex-1 text-base  placeholder:text-gray-400"
+              value={comment}
+              onChangeText={setComment}
+              onSubmitEditing={handleAddComment}
+              textAlignVertical="top"
+              submitBehavior="submit"
+              multiline
+            />
+            <TouchableOpacity
+              className="bg-gray-900 rounded-full h-12 w-12 flex-row items-center justify-center"
+              onPress={handleAddComment}
+            >
+              {isAddingComment ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Send size={20} color="white" />
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
 
         <Toast message={toastMessage} visible={toastVisible} />
       </SafeAreaView>
@@ -182,6 +185,7 @@ const CommentItem = ({
   createdAt: string;
   commentId: number;
   onDeleteComment: (commentId: number) => void;
+  isDeletingComment: boolean;
 }) => {
   const renderTextWithLinks = (text: string) => {
     const parts = text.split(URL_REGEX);
@@ -231,7 +235,11 @@ const CommentItem = ({
         <Text className="text-xs text-gray-500">{formatDate(createdAt)}</Text>
       </View>
       <View className="w-6 h-6 bg-red-50 rounded-full flex-row items-center justify-center">
-        <X size={12} color="red" onPress={() => deleteComment(commentId)} />
+        {isDeletingComment ? (
+          <ActivityIndicator size="small" color="gray" />
+        ) : (
+          <X size={12} color="red" onPress={() => deleteComment(commentId)} />
+        )}
       </View>
     </View>
   );

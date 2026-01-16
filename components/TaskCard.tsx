@@ -1,5 +1,6 @@
 import { Calendar, Check, ImageIcon, MessageCircle } from "lucide-react-native";
-import { Text, TouchableOpacity, View } from "react-native";
+import { PressableScale } from "pressto";
+import { Text, View } from "react-native";
 import { PRIORITY_COLORS } from "../constants/colors";
 import { formatDate } from "../utils/dateHelpers";
 
@@ -42,11 +43,18 @@ export default function TaskCard({
     : "Today";
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
+    <PressableScale
       onPress={onPress}
-      className={`p-5 rounded-3xl mb-4 shadow-sm`}
-      style={{ backgroundColor: colors.lightBg }}
+      // className={`p-5 rounded-3xl mb-4 shadow-sm`}
+      style={{
+        backgroundColor: colors.lightBg,
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 16,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+      }}
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1 mr-4">
@@ -66,16 +74,26 @@ export default function TaskCard({
         </View>
 
         {/* Toggle Button / Checkbox */}
-        <TouchableOpacity
+        <PressableScale
           onPress={(e) => {
-            e.stopPropagation();
+            // e.stopPropagation();
             onToggle?.();
           }}
-          className={`w-12 h-12 rounded-full items-center justify-center border-2 ${
-            isCompleted
-              ? "bg-white border-white opacity-50"
-              : "bg-white border-white/50"
-          }`}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 100,
+            borderWidth: 2,
+            borderColor: isCompleted ? "white" : "rgba(255, 255, 255, 0.5)",
+            backgroundColor: isCompleted ? "white" : "rgba(255, 255, 255, 0.5)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          // className={`w-12 h-12 rounded-full items-center justify-center border-2 ${
+          //   isCompleted
+          //     ? "bg-white border-white opacity-50"
+          //     : "bg-white border-white/50"
+          // }`}
         >
           {isCompleted ? (
             <Check size={20} color="#000" strokeWidth={3} />
@@ -85,7 +103,7 @@ export default function TaskCard({
               style={{ backgroundColor: colors.solid }}
             />
           )}
-        </TouchableOpacity>
+        </PressableScale>
       </View>
 
       <View className="flex-row items-center justify-between mt-2">
@@ -125,6 +143,6 @@ export default function TaskCard({
           </Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </PressableScale>
   );
 }

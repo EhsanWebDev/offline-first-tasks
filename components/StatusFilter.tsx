@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { PressableScale } from "pressto";
+import { ScrollView, Text, View } from "react-native";
 
 export type FilterStatus = "All Tasks" | "Ongoing" | "Completed";
 
@@ -24,7 +25,7 @@ export default function StatusFilter({
   ];
 
   return (
-    <View className="mb-6">
+    <View className="mb-3">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -33,12 +34,12 @@ export default function StatusFilter({
         {filters.map((filter) => {
           const isActive = currentFilter === filter.label;
           return (
-            <TouchableOpacity
+            <PressableScale
               key={filter.label}
               onPress={() => onFilterChange(filter.label)}
-              className={`flex-row items-center px-5 py-3 rounded-full mr-3 ${
-                isActive ? "bg-gray-900" : "bg-white border border-gray-100"
-              }`}
+              // className={`flex-row items-center px-5 py-3 rounded-full mr-3 ${
+              //   isActive ? "bg-gray-900" : "bg-white border border-gray-100"
+              // }`}
               style={{
                 shadowColor: isActive ? "#000" : "transparent",
                 shadowOffset: { width: 0, height: 4 },
@@ -47,6 +48,13 @@ export default function StatusFilter({
                 elevation: isActive ? 4 : 0,
                 // Android specific fix: ensure background color is solid for elevation
                 backgroundColor: isActive ? "#111827" : "#FFFFFF",
+                borderRadius: 100,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                marginRight: 8,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               <Text
@@ -69,7 +77,7 @@ export default function StatusFilter({
                   {filter.count}
                 </Text>
               </View>
-            </TouchableOpacity>
+            </PressableScale>
           );
         })}
       </ScrollView>

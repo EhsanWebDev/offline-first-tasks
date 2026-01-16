@@ -1,10 +1,10 @@
 import { useCreateTask } from "@/api/tasks/mutations";
+import PriorityBar from "@/components/PriorityBar";
 import AppInput from "@/components/TextInput/AppInput";
-import { uploadImageToSupabase } from "@/utils/imageUpload";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { Calendar, ChevronLeft, ImagePlus, Plus, X } from "lucide-react-native";
+import { Calendar, ChevronLeft, Plus, X } from "lucide-react-native";
+import { PressableScale } from "pressto";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Priority } from "../components/PriorityTag";
-import { PRIORITY_COLORS } from "../constants/colors";
 import { formatDate } from "../utils/dateHelpers";
 
 export default function CreateTaskScreen() {
@@ -29,32 +28,12 @@ export default function CreateTaskScreen() {
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [errors, setErrors] = useState<{
     title?: string;
     description?: string;
   }>({});
 
   const { mutate: createTaskMutation, isPending } = useCreateTask();
-
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission needed", "We need access to your photos");
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images",
-      allowsEditing: true,
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
-  };
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -65,52 +44,27 @@ export default function CreateTaskScreen() {
     setErrors({});
 
     try {
-      if (imageUri) {
-        setUploading(true);
-        const imageUrlFromSupabase = await uploadImageToSupabase(imageUri);
-
-        createTaskMutation(
-          {
-            title: title.trim(),
-            description: description.trim(),
-            priority: priority as "low" | "medium" | "high",
-            due_date: dueDate ? dueDate.toISOString() : undefined,
-            image_url: imageUrlFromSupabase,
+      createTaskMutation(
+        {
+          title: title.trim(),
+          description: description.trim(),
+          priority: priority as "low" | "medium" | "high",
+          due_date: dueDate ? dueDate.toISOString() : undefined,
+        },
+        {
+          onSuccess: () => {
+            router.back();
           },
-          {
-            onSuccess: () => {
-              router.back();
-            },
-            onError: (error) => {
-              console.error(error);
-              Alert.alert("Error", (error as Error).message);
-            },
-          }
-        );
-      } else {
-        createTaskMutation(
-          {
-            title: title.trim(),
-            description: description.trim(),
-            priority: priority as "low" | "medium" | "high",
-            due_date: dueDate ? dueDate.toISOString() : undefined,
+          onError: (error) => {
+            console.error(error);
+            Alert.alert("Error", (error as Error).message);
           },
-          {
-            onSuccess: () => {
-              router.back();
-            },
-            onError: (error) => {
-              console.error(error);
-              Alert.alert("Error", (error as Error).message);
-            },
-          }
-        );
-      }
+        }
+      );
     } catch (error) {
       console.error(error);
       Alert.alert("Error", (error as Error).message);
     } finally {
-      setUploading(false);
     }
   };
 
@@ -198,58 +152,11 @@ export default function CreateTaskScreen() {
             )}
           </View>
           {/* Priority */}
-          <View className="mb-8">
-            <Text className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-              Priority Level
-            </Text>
-            <View className="flex-row justify-between">
-              {(["low", "medium", "high"] as Priority[]).map((p) => {
-                const colors = PRIORITY_COLORS[p];
-                const isSelected = priority === p;
-
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    onPress={() => setPriority(p)}
-                    activeOpacity={0.7}
-                    className="flex-1 mx-1 h-14 rounded-2xl items-center justify-center border-2"
-                    style={{
-                      backgroundColor: isSelected ? colors.lightBg : "#F9FAFB",
-                      borderColor: isSelected ? colors.solid : "transparent",
-                    }}
-                  >
-                    <View className="flex-row items-center">
-                      <View
-                        className="w-2 h-2 rounded-full mr-2"
-                        style={{ backgroundColor: colors.solid }}
-                      />
-                      <Text
-                        className="font-bold capitalize text-base"
-                        style={{ color: isSelected ? colors.solid : "#4B5563" }}
-                      >
-                        {p}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-          {/* Image */}
-          <View className="mb-6">
-            <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-              Image (Optional)
-            </Text>
-            <TouchableOpacity
-              onPress={pickImage}
-              className="flex-row items-center bg-gray-100 rounded-2xl px-4 h-14"
-            >
-              <ImagePlus size={20} color="#94A3B8" />
-              <Text className="text-base text-gray-900 ml-3">
-                {imageUri ? "Change Image" : "Add Image"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <PriorityBar
+            priority={priority}
+            setPriority={setPriority}
+            isPending={isPending}
+          />
         </ScrollView>
 
         {/* iOS Date Picker Modal */}
@@ -297,14 +204,23 @@ export default function CreateTaskScreen() {
 
         {/* Create Button */}
         <View className="absolute bottom-6 left-6 right-6">
-          <TouchableOpacity
+          <PressableScale
             onPress={handleCreate}
-            disabled={isPending || uploading}
-            className={`w-full h-14 bg-slate-900 rounded-full flex-row items-center justify-center shadow-lg ${
-              isPending || uploading ? "opacity-80" : ""
-            }`}
+            style={{
+              width: "100%",
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: isPending ? "#6B7280" : "#1E293B",
+              justifyContent: "center",
+              alignItems: "center",
+              flexDirection: "row",
+            }}
+            enabled={!isPending}
+            // className={`w-full h-14 bg-slate-900 rounded-full flex-row items-center justify-center shadow-lg ${
+            //   isPending || uploading ? "opacity-80" : ""
+            // }`}
           >
-            {isPending || uploading ? (
+            {isPending ? (
               <ActivityIndicator color="white" />
             ) : (
               <>
@@ -315,11 +231,11 @@ export default function CreateTaskScreen() {
                   className="mr-2"
                 />
                 <Text className="text-white font-bold text-lg">
-                  {uploading ? "Uploading..." : "Create Task"}
+                  {"Create Task"}
                 </Text>
               </>
             )}
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </SafeAreaView>
     </View>

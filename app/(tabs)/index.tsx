@@ -4,13 +4,13 @@ import { Priority, Task } from "@/api/types/tasks";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Plus } from "lucide-react-native";
+import { PressableScale } from "pressto";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -19,7 +19,6 @@ import HomeHeader from "../../components/HomeHeader";
 import StatusFilter, { FilterStatus } from "../../components/StatusFilter";
 import TaskCard from "../../components/TaskCard";
 import Toast from "../../components/Toast";
-
 export default function HomeScreen() {
   const router = useRouter();
 
@@ -159,8 +158,8 @@ export default function HomeScreen() {
             }
             contentContainerStyle={{
               paddingHorizontal: 24,
-              paddingBottom: 100,
-              paddingTop: 10,
+              paddingBottom: 180,
+              // paddingTop: 10,
               flexGrow: 1, // Ensures empty state stays centered
             }}
             showsVerticalScrollIndicator={false}
@@ -179,20 +178,22 @@ export default function HomeScreen() {
       <Toast message={toastMessage} visible={toastVisible} />
 
       {/* FAB */}
-      <TouchableOpacity
-        className="absolute bottom-6 right-6 w-16 h-16 bg-gray-900 rounded-full items-center justify-center shadow-lg"
-        activeOpacity={0.8}
+      <PressableScale
         onPress={() => router.push("/create-task")}
         style={{
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 8,
+          position: "absolute",
+          bottom: 110,
+          right: 20,
+          width: 54,
+          height: 54,
+          borderRadius: 27,
+          backgroundColor: "#000",
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
         <Plus color="white" size={30} strokeWidth={2.5} />
-      </TouchableOpacity>
+      </PressableScale>
     </SafeAreaView>
   );
 }

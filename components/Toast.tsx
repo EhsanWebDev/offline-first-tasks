@@ -1,4 +1,4 @@
-import { View, Text } from "react-native";
+import { Text } from "react-native";
 import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 
 interface ToastProps {
@@ -13,7 +13,7 @@ export default function Toast({ message, visible }: ToastProps) {
     <Animated.View
       entering={FadeInDown}
       exiting={FadeOutDown}
-      className="absolute bottom-12 self-center bg-gray-900 px-6 py-3 rounded-full opacity-90 shadow-lg z-50"
+      className="absolute bottom-32 self-center bg-gray-900 px-6 py-3 rounded-full opacity-90 shadow-lg z-50"
     >
       <Text className="text-white font-medium text-sm">{message}</Text>
     </Animated.View>

@@ -2,9 +2,10 @@ import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
 import { useTaskMediaByTaskId } from "@/api/tasks/media/queries";
 import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
 import { useTaskById } from "@/api/tasks/queries";
+import Header from "@/components/AppHeaders/Header";
+import PriorityBar from "@/components/PriorityBar";
 import { Priority } from "@/components/PriorityTag";
 import AppInput from "@/components/TextInput/AppInput";
-import { PRIORITY_COLORS } from "@/constants/colors";
 import { formatDate } from "@/utils/dateHelpers";
 import {
   deleteImageFromSupabase,
@@ -13,6 +14,7 @@ import {
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
+import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -24,6 +26,7 @@ import {
   Trash2,
   X,
 } from "lucide-react-native";
+import { PressableScale } from "pressto";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -41,7 +44,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function EditTaskScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -125,6 +128,7 @@ export default function EditTaskScreen() {
                   setImageUrl(null);
                 }
               }
+              queryClient.invalidateQueries({ queryKey: ["tasks"] });
               router.back();
             },
             onError: (error) => {
@@ -240,27 +244,31 @@ export default function EditTaskScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView className="flex-1">
         {/* Header */}
-        <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
-          <View className="flex-row items-center flex-1">
-            <TouchableOpacity onPress={() => router.back()} className="mr-4">
-              <ChevronLeft size={28} color="#1E293B" />
-            </TouchableOpacity>
-            <Text className="text-xl font-semibold text-gray-900">
-              Edit Task
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={handleDelete}
-            disabled={isRemoveTaskPending}
-            className="p-2"
-          >
-            {isRemoveTaskPending ? (
-              <ActivityIndicator color="#EF4444" />
-            ) : (
-              <Trash2 size={22} color="#EF4444" />
-            )}
-          </TouchableOpacity>
-        </View>
+        <Header
+          title="Edit Task"
+          onBackPress={() => router.back()}
+          headerRight={
+            <PressableScale
+              onPress={handleDelete}
+              enabled={!isRemoveTaskPending}
+              style={{
+                backgroundColor: "rgba(0,0,0,0.05)",
+                borderRadius: 100,
+                padding: 8,
+                width: 40,
+                height: 40,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {isRemoveTaskPending ? (
+                <ActivityIndicator color="#EF4444" />
+              ) : (
+                <Trash2 size={24} color="#EF4444" />
+              )}
+            </PressableScale>
+          }
+        />
 
         <ScrollView
           className="flex-1 px-6 pt-6"
@@ -332,43 +340,11 @@ export default function EditTaskScreen() {
           </View>
 
           {/* Priority */}
-          <View className="mb-8">
-            <Text className="text-sm font-bold text-gray-900 mb-4 uppercase tracking-wide">
-              Priority Level
-            </Text>
-            <View className="flex-row justify-between">
-              {(["low", "medium", "high"] as Priority[]).map((p) => {
-                const colors = PRIORITY_COLORS[p];
-                const isSelected = priority === p;
-
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    onPress={() => setPriority(p)}
-                    activeOpacity={0.7}
-                    className="flex-1 mx-1 h-14 rounded-2xl items-center justify-center border-2"
-                    style={{
-                      backgroundColor: isSelected ? colors.lightBg : "#F9FAFB",
-                      borderColor: isSelected ? colors.solid : "transparent",
-                    }}
-                  >
-                    <View className="flex-row items-center">
-                      <View
-                        className="w-2 h-2 rounded-full mr-2"
-                        style={{ backgroundColor: colors.solid }}
-                      />
-                      <Text
-                        className="font-bold capitalize text-base"
-                        style={{ color: isSelected ? colors.solid : "#4B5563" }}
-                      >
-                        {p}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+          <PriorityBar
+            priority={priority}
+            setPriority={setPriority}
+            isPending={isPending}
+          />
           {/* Media and Comments */}
           <View className="flex-row justify-between gap-4">
             <View className="flex-1 mb-6">

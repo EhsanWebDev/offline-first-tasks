@@ -13,10 +13,13 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { ImagePlus, Trash2 } from "lucide-react-native";
+import { PressableScale } from "pressto";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -35,6 +38,8 @@ const TaskMedia = () => {
 
   const [uploading, setUploading] = useState(false);
   const [deletingMediaId, setDeletingMediaId] = useState<number | null>(null);
+  const [showFullImage, setShowFullImage] = useState(false);
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
 
   const {
     mutate: createTaskMediaMutation,
@@ -143,6 +148,11 @@ const TaskMedia = () => {
     ]);
   };
 
+  const handleImagePress = (image: string) => {
+    setShowFullImage(true);
+    setFullImageUrl(image);
+  };
+
   const PADDING_X = 32;
   const GAP = 12;
   const NUM_COLS = 3;
@@ -170,11 +180,34 @@ const TaskMedia = () => {
                 image={item.url}
                 onDelete={(image) => handleDeleteMedia(item.id, image)}
                 isDeleting={deletingMediaId === item.id}
+                onImagePress={() => handleImagePress(item.url)}
               />
             </View>
           ))}
         </View>
       )}
+      <Modal
+        visible={showFullImage}
+        onRequestClose={() => setShowFullImage(false)}
+        transparent={true}
+        animationType="fade"
+      >
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            setShowFullImage(false);
+          }}
+          className="flex-1 justify-end bg-black/50 relative p-4"
+        >
+          <View className="flex-1 justify-end relative p-4">
+            <Image
+              source={{ uri: fullImageUrl ?? "" }}
+              style={{ width: "100%", height: "100%", flex: 1 }}
+              contentFit="contain"
+            />
+          </View>
+        </Pressable>
+      </Modal>
       <View className="px-6 pb-6">
         <TouchableOpacity
           onPress={pickImage}
@@ -204,33 +237,38 @@ const TaskMedia = () => {
   );
 };
 
+type MediaItemProps = {
+  image: string;
+  onDelete?: (image: string) => void;
+  onImagePress?: () => void;
+  isDeleting: boolean;
+};
 const MediaItem = ({
   image,
-  onDelete,
+  onDelete = () => {},
+  onImagePress = () => {},
   isDeleting,
-}: {
-  image: string;
-  onDelete: (image: string) => void;
-  isDeleting: boolean;
-}) => {
+}: MediaItemProps) => {
   return (
-    <View className="flex-row items-center justify-between relative">
-      <Image
-        source={{ uri: image }}
-        style={{ width: 100, height: 100, borderRadius: 10 }}
-        contentFit="cover"
-      />
-      <TouchableOpacity
-        onPress={() => onDelete(image)}
-        className="absolute top-0 right-0 bg-white rounded-full p-2"
-      >
-        {isDeleting ? (
-          <ActivityIndicator size="small" color="gray" />
-        ) : (
-          <Trash2 size={16} color="#EF4444" />
-        )}
-      </TouchableOpacity>
-    </View>
+    <PressableScale onPress={onImagePress}>
+      <View className="flex-row items-center justify-between relative">
+        <Image
+          source={{ uri: image }}
+          style={{ width: 100, height: 100, borderRadius: 10 }}
+          contentFit="cover"
+        />
+        <TouchableOpacity
+          onPress={() => onDelete(image)}
+          className="absolute top-0 right-0 bg-white rounded-full p-2"
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="gray" />
+          ) : (
+            <Trash2 size={16} color="#EF4444" />
+          )}
+        </TouchableOpacity>
+      </View>
+    </PressableScale>
   );
 };
 
