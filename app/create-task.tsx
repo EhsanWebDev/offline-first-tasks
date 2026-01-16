@@ -87,6 +87,24 @@ export default function CreateTaskScreen() {
             },
           }
         );
+      } else {
+        createTaskMutation(
+          {
+            title: title.trim(),
+            description: description.trim(),
+            priority: priority as "low" | "medium" | "high",
+            due_date: dueDate ? dueDate.toISOString() : undefined,
+          },
+          {
+            onSuccess: () => {
+              router.back();
+            },
+            onError: (error) => {
+              console.error(error);
+              Alert.alert("Error", (error as Error).message);
+            },
+          }
+        );
       }
     } catch (error) {
       console.error(error);

@@ -9,6 +9,7 @@ export interface Task {
   created_at: string;
   image_url?: string;
   task_comments?: { count: number }[];
+  task_media?: { count: number }[];
 }
 
 export interface TaskComment {

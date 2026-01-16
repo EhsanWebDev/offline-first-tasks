@@ -1,5 +1,24 @@
 import { supabase } from "@/utils/supabase";
 
+export const getTasks = async () => {
+  const { data, error } = await supabase
+    .from("tasks")
+    .select("*, task_comments(count), task_media(count)")
+    .order("created_at", { ascending: false });
+  if (error) {
+    throw error;
+  }
+  return data;
+};
+
+export const getTaskById = async (id: string) => {
+  const { data, error } = await supabase.from("tasks").select("*").eq("id", id);
+  if (error) {
+    throw error;
+  }
+  return data;
+};
+
 export const updateTask = async (
   id: string,
   data: {

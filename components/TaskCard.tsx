@@ -1,4 +1,4 @@
-import { Calendar, Check, MessageCircle } from "lucide-react-native";
+import { Calendar, Check, ImageIcon, MessageCircle } from "lucide-react-native";
 import { Text, TouchableOpacity, View } from "react-native";
 import { PRIORITY_COLORS } from "../constants/colors";
 import { formatDate } from "../utils/dateHelpers";
@@ -15,6 +15,7 @@ interface TaskCardProps {
   createdAt?: number;
   dueDate?: number;
   commentsCount?: number;
+  mediaCount?: number;
 }
 
 export default function TaskCard({
@@ -27,6 +28,7 @@ export default function TaskCard({
   createdAt,
   dueDate,
   commentsCount = 0,
+  mediaCount = 0,
 }: TaskCardProps) {
   const colors =
     PRIORITY_COLORS[priority?.toLowerCase() as Priority] ||
@@ -102,6 +104,14 @@ export default function TaskCard({
               <MessageCircle size={14} color="#000" />
               <Text className="font-bold text-xs text-gray-900">
                 {commentsCount}
+              </Text>
+            </View>
+          )}
+          {mediaCount > 0 && (
+            <View className="flex-row items-center gap-1 bg-white/80 px-4 py-2 rounded-xl">
+              <ImageIcon size={14} color="#000" />
+              <Text className="font-bold text-xs text-gray-900">
+                {mediaCount}
               </Text>
             </View>
           )}

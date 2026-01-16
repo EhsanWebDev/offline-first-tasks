@@ -1,12 +1,24 @@
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 import React from "react";
 
 export default function TabLayout() {
+  // ios liquid glass tab bar effect
+  const iosLiquidGlassTabBarEffect = {
+    tabBarTransparent: true,
+    tabBarBlurEffect: "light",
+    tabBarStyle: {
+      backgroundColor: "transparent",
+    },
+  };
   return (
     <Tabs
       screenOptions={{
         headerShown: true,
+        ...iosLiquidGlassTabBarEffect,
+        headerStyle: {
+          backgroundColor: "transparent",
+        },
       }}
     >
       <Tabs.Screen

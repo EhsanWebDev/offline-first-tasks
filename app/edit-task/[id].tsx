@@ -1,4 +1,5 @@
 import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
+import { useTaskMediaByTaskId } from "@/api/tasks/media/queries";
 import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
 import { useTaskById } from "@/api/tasks/queries";
 import { Priority } from "@/components/PriorityTag";
@@ -53,9 +54,11 @@ export default function EditTaskScreen() {
   }>({});
 
   const { data: comments } = useTaskCommentsByTaskId(Number(id));
-
+  const { data: media } = useTaskMediaByTaskId(Number(id));
   const commentsCount = comments?.length ?? 0;
+  const mediaCount = media?.length ?? 0;
   const hasComments = commentsCount > 0;
+  const hasMedia = media?.length && media?.length > 0;
   const { mutate: updateTaskMutation, isPending } = useUpdateTask();
   const { data: theTask, isLoading: isTaskLoading } = useTaskById(id as string);
 
@@ -370,7 +373,7 @@ export default function EditTaskScreen() {
           <View className="flex-row justify-between gap-4">
             <View className="flex-1 mb-6">
               <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
-                Media (Optional)
+                Media {hasMedia ? `(${mediaCount})` : ""}
               </Text>
               <Pressable
                 onPress={() =>

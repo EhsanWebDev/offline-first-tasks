@@ -104,6 +104,7 @@ export default function HomeScreen() {
           isCompleted={item.is_completed}
           priority={item.priority as Priority}
           commentsCount={item.task_comments?.[0]?.count ?? 0}
+          mediaCount={item.task_media?.[0]?.count ?? 0}
           createdAt={
             item.created_at ? new Date(item.created_at).getTime() : undefined
           }

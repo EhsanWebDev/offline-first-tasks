@@ -44,8 +44,6 @@ export const deleteImageFromSupabase = async (fullUrl: string | null) => {
     // URL: https://xyz.supabase.co/.../task-media/filename.jpg
     // We just need "filename.jpg"
     const fileName = fullUrl.split("/").pop();
-    console.log("fullUrl", fullUrl);
-    console.log("fileName", fileName);
 
     if (!fileName) return;
 
