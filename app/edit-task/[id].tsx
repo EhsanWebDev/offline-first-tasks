@@ -1,11 +1,13 @@
 import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
 import { useTaskMediaByTaskId } from "@/api/tasks/media/queries";
 import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
-import { useTaskById } from "@/api/tasks/queries";
 import Header from "@/components/AppHeaders/Header";
 import PriorityBar from "@/components/PriorityBar";
 import { Priority } from "@/components/PriorityTag";
 import AppInput from "@/components/TextInput/AppInput";
+import { database } from "@/db";
+import Task from "@/db/model/Task";
+import { getTaskById } from "@/db/queries/taskApi";
 import { formatDate } from "@/utils/dateHelpers";
 import {
   deleteImageFromSupabase,
@@ -19,12 +21,11 @@ import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   Calendar,
-  ChevronLeft,
   ImageIcon,
   MessageCircle,
   Save,
   Trash2,
-  X,
+  X
 } from "lucide-react-native";
 import { PressableScale } from "pressto";
 import { useEffect, useState } from "react";
@@ -63,54 +64,70 @@ export default function EditTaskScreen() {
   const hasComments = commentsCount > 0;
   const hasMedia = media?.length && media?.length > 0;
   const { mutate: updateTaskMutation, isPending } = useUpdateTask();
-  const { data: theTask, isLoading: isTaskLoading } = useTaskById(id as string);
+  // const { data: theTask } = useTaskById(id as string);
+
+  const [theTask, setTheTask] = useState<Task | null>(null);
+
+
+  useEffect(() => {
+    if (id) {
+      getTaskById(id as string).then((task) => {
+        setTitle(task?.title || "");
+        setDescription(task?.description || "");
+        setPriority(task?.priority as Priority || "medium");
+        setDueDate(task?.due_date || null);
+        setTheTask(task);
+      });
+    }
+  }, [id]);
 
   // Extract is_completed to preserve it during update
-  const is_completed = theTask?.[0]?.is_completed ?? false;
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const is_completed = theTask?.is_completed ?? false;
+  const [imageUrl, setImageUrl] = useState<string | null>(theTask?.image_url ?? null);
 
   const { mutate: removeTaskMutation, isPending: isRemoveTaskPending } =
     useDeleteTask();
 
-  useEffect(() => {
-    if (theTask && !isTaskLoading) {
-      setTitle(theTask[0].title || "");
-      setDescription(theTask[0].description || "");
-      setPriority((theTask[0].priority as Priority) || "medium");
-      setDueDate(theTask[0].due_date ?? null);
-      setImageUrl(theTask[0].image_url ?? null);
-    }
-  }, [theTask, isTaskLoading]);
-
   const handleUpdate = async () => {
     setIsLoading(true);
-    let imageUrlFromSupabase = null;
-    if (imageUrl) {
-      imageUrlFromSupabase = await uploadImageToSupabase(imageUrl);
-    }
-    updateTaskMutation(
-      {
-        id: id as string,
-        title: title.trim(),
-        description: description?.trim(),
-        priority: priority,
-        due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
-        is_completed: is_completed,
-        image_url: imageUrlFromSupabase ?? undefined,
-      },
-      {
-        onSuccess: () => {
-          setIsLoading(false);
-          router.back();
-        },
-        onError: (error) => {
-          console.error(error);
-          Alert.alert("Error", (error as Error).message);
-          setIsLoading(false);
-        },
-      }
-    );
+    await database.write(async () => {
+      await theTask?.update((task) => {
+        task.title = title.trim();
+        task.description = description?.trim();
+        task.priority = priority;
+        task.due_date = dueDate ? dueDate : 0;
+        task.is_completed = is_completed;
+      });
+    });
     setIsLoading(false);
+    // setIsLoading(true);
+    // let imageUrlFromSupabase = null;
+    // if (imageUrl) {
+    //   imageUrlFromSupabase = await uploadImageToSupabase(imageUrl);
+    // }
+    // updateTaskMutation(
+    //   {
+    //     id: id as string,
+    //     title: title.trim(),
+    //     description: description?.trim(),
+    //     priority: priority,
+    //     due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+    //     is_completed: is_completed,
+    //     image_url: imageUrlFromSupabase ?? undefined,
+    //   },
+    //   {
+    //     onSuccess: () => {
+    //       setIsLoading(false);
+    //       router.back();
+    //     },
+    //     onError: (error) => {
+    //       console.error(error);
+    //       Alert.alert("Error", (error as Error).message);
+    //       setIsLoading(false);
+    //     },
+    //   }
+    // );
+    // setIsLoading(false);
   };
 
   const handleDelete = () => {
@@ -120,22 +137,27 @@ export default function EditTaskScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          removeTaskMutation(id as string, {
-            onSuccess: async () => {
-              if (imageUrl) {
-                const deleted = await deleteImageFromSupabase(imageUrl);
-                if (deleted) {
-                  setImageUrl(null);
-                }
-              }
-              queryClient.invalidateQueries({ queryKey: ["tasks"] });
-              router.back();
-            },
-            onError: (error) => {
-              console.error(error);
-              Alert.alert("Error", (error as Error).message);
-            },
+
+          await database.write(async () => {
+            await theTask?.destroyPermanently();
           });
+          router.back();
+          // removeTaskMutation(id as string, {
+          //   onSuccess: async () => {
+          //     if (imageUrl) {
+          //       const deleted = await deleteImageFromSupabase(imageUrl);
+          //       if (deleted) {
+          //         setImageUrl(null);
+          //       }
+          //     }
+          //     queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          //     router.back();
+          //   },
+          //   onError: (error) => {
+          //     console.error(error);
+          //     Alert.alert("Error", (error as Error).message);
+          //   },
+          // });
         },
       },
     ]);
@@ -205,39 +227,6 @@ export default function EditTaskScreen() {
       );
     }
   };
-
-  if (isTaskLoading) {
-    return (
-      <SafeAreaView className="flex-1">
-        <Stack.Screen options={{ headerShown: false }} />
-        <View className="flex-row items-center justify-between px-6 py-4 border-b border-gray-100">
-          <View className="flex-row items-center flex-1">
-            <TouchableOpacity onPress={() => router.back()} className="mr-4">
-              <ChevronLeft size={28} color="#1E293B" />
-            </TouchableOpacity>
-            <Text className="text-xl font-semibold text-gray-900">
-              Edit Task
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={handleDelete}
-            disabled={isRemoveTaskPending}
-            className="p-2"
-          >
-            {isRemoveTaskPending ? (
-              <ActivityIndicator color="#EF4444" />
-            ) : (
-              <Trash2 size={22} color="#EF4444" />
-            )}
-          </TouchableOpacity>
-        </View>
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#4F46E5" />
-          <Text className="text-gray-400 text-lg">Loading your task...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <View className="flex-1 bg-white">

@@ -1,5 +1,6 @@
 import queryClient from "@/api";
 
+import * as Sentry from '@sentry/react-native';
 import { QueryClientProvider } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { Stack } from "expo-router";
@@ -11,7 +12,7 @@ import {
   SafeAreaProvider,
 } from "react-native-safe-area-context";
 import "../global.css";
-import * as Sentry from '@sentry/react-native';
+
 
 Sentry.init({
   dsn: 'https://8e068f0a3cc4523c82303dc0a82c981d@o4510721997078528.ingest.us.sentry.io/4510721999175680',
@@ -31,8 +32,12 @@ Sentry.init({
   // uncomment the line below to enable Spotlight (https://spotlightjs.com)
   // spotlight: __DEV__,
 });
+// import Post from './model/Post' // ⬅️ You'll import your Models here
+
+
 
 export default Sentry.wrap(function RootLayout() {
+ 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>

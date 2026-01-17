@@ -1,6 +1,7 @@
 import { useCreateTask } from "@/api/tasks/mutations";
 import PriorityBar from "@/components/PriorityBar";
 import AppInput from "@/components/TextInput/AppInput";
+import { createTask } from "@/db/queries/taskApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { Calendar, ChevronLeft, Plus, X } from "lucide-react-native";
@@ -44,23 +45,33 @@ export default function CreateTaskScreen() {
     setErrors({});
 
     try {
-      createTaskMutation(
-        {
-          title: title.trim(),
-          description: description.trim(),
-          priority: priority as "low" | "medium" | "high",
-          due_date: dueDate ? dueDate.toISOString() : undefined,
-        },
-        {
-          onSuccess: () => {
-            router.back();
-          },
-          onError: (error) => {
-            console.error(error);
-            Alert.alert("Error", (error as Error).message);
-          },
-        }
-      );
+       await createTask({
+        title: title.trim(),
+        description: description.trim(),
+        priority: priority,
+        due_date: dueDate ? dueDate.getTime() : 0,
+        is_completed: false,
+        created_at: new Date().getTime(),
+       });
+       router.back();
+      
+      // createTaskMutation(
+      //   {
+      //     title: title.trim(),
+      //     description: description.trim(),
+      //     priority: priority as "low" | "medium" | "high",
+      //     due_date: dueDate ? dueDate.toISOString() : undefined,
+      //   },
+      //   {
+      //     onSuccess: () => {
+      //       router.back();
+      //     },
+      //     onError: (error) => {
+      //       console.error(error);
+      //       Alert.alert("Error", (error as Error).message);
+      //     },
+      //   }
+      // );
     } catch (error) {
       console.error(error);
       Alert.alert("Error", (error as Error).message);

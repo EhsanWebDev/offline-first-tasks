@@ -1,25 +1,22 @@
 import { useUpdateTask } from "@/api/tasks/mutations";
 import { useTasks } from "@/api/tasks/queries";
-import { Priority, Task } from "@/api/types/tasks";
+import { Priority } from "@/api/types/tasks";
+import HomeHeader from "@/components/HomeHeader";
+import { default as Task, default as TaskModel } from "@/db/model/Task";
+import { withObservables } from '@nozbe/watermelondb/react';
 import { useRouter } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import { Plus } from "lucide-react-native";
 import { PressableScale } from "pressto";
-import { useCallback, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HomeHeader from "../../components/HomeHeader";
 import StatusFilter, { FilterStatus } from "../../components/StatusFilter";
 import TaskCard from "../../components/TaskCard";
 import Toast from "../../components/Toast";
-export default function HomeScreen() {
+import { database, tasksCollection } from "../../db";
+
+ const HomeScreen = ({ tasks }: { tasks: TaskModel[] }) => {
   const router = useRouter();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -27,23 +24,23 @@ export default function HomeScreen() {
   const [toastMessage, setToastMessage] = useState("");
   const [filter, setFilter] = useState<FilterStatus>("All Tasks");
 
-  const {
-    data: tasks,
-    isLoading: tasksLoading,
-    refetch: refetchTasks,
-  } = useTasks();
+  // const tasksCollection = database.get('tasks')
+  
+  console.log(tasks);
 
-  console.log("tasks", tasks);
+  const {
+    isLoading: tasksLoading,
+  } = useTasks();
 
   const { mutate: updateTaskMutation } = useUpdateTask();
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    refetchTasks();
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1200);
-  }, [refetchTasks]);
+  // const onRefresh = useCallback(() => {
+  //   setRefreshing(true);
+  //   refetchTasks();
+  //   setTimeout(() => {
+  //     setRefreshing(false);
+  //   }, 1200);
+  // }, [refetchTasks]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -51,27 +48,33 @@ export default function HomeScreen() {
     setTimeout(() => setToastVisible(false), 2000);
   };
 
-  const handleToggleTask = (task: Task) => {
+  const handleToggleTask = async (task: Task) => {
     const newStatus = !task.is_completed;
 
-    updateTaskMutation(
-      {
-        title: task.title,
-        priority: task.priority as "low" | "medium" | "high",
-        description: task.description ?? undefined,
-        due_date: task.due_date ?? undefined,
-        id: task.id,
-        is_completed: newStatus,
-      },
-      {
-        onSuccess: () => {
-          showToast(newStatus ? "Task completed " : "Task updated");
-        },
-        onError: (error) => {
-          console.error(error);
-        },
-      }
-    );
+    await database.write(async () => {
+      await task.update((t) => {
+        t.is_completed = newStatus;
+      });
+    });
+
+    // updateTaskMutation(
+    //   {
+    //     title: task.title,
+    //     priority: task.priority as "low" | "medium" | "high",
+    //     description: task.description ?? undefined,
+    //     due_date: task.due_date ?? undefined,
+    //     id: task.id,
+    //     is_completed: newStatus,
+    //   },
+    //   {
+    //     onSuccess: () => {
+    //       showToast(newStatus ? "Task completed " : "Task updated");
+    //     },
+    //     onError: (error) => {
+    //       console.error(error);
+    //     },
+    //   }
+    // );
   };
 
   const filteredTasks = useMemo(() => {
@@ -122,7 +125,7 @@ export default function HomeScreen() {
       className="flex-1 bg-gray-50"
       edges={["top", "left", "right"]}
     >
-      <StatusBar style="dark" />
+      {/* <StatusBar style="dark" /> */}
       <View className="flex-1">
         <HomeHeader />
 
@@ -132,7 +135,7 @@ export default function HomeScreen() {
           counts={counts}
         />
 
-        {/* Task List Area */}
+       
         {tasksLoading ? (
           // Loading View
           <View className="flex-1 justify-center items-center">
@@ -163,21 +166,21 @@ export default function HomeScreen() {
               flexGrow: 1, // Ensures empty state stays centered
             }}
             showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#4F46E5" // iOS spinner color
-                colors={["#4F46E5"]} // Android spinner color
-              />
-            }
+            // refreshControl={
+            //   <RefreshControl
+            //     refreshing={refreshing}
+            //     onRefresh={onRefresh}
+            //     tintColor="#4F46E5" // iOS spinner color
+            //     colors={["#4F46E5"]} // Android spinner color
+            //   />
+            // }
           />
         )}
       </View>
 
       <Toast message={toastMessage} visible={toastVisible} />
 
-      {/* FAB */}
+    
       <PressableScale
         onPress={() => router.push("/create-task")}
         style={{
@@ -196,4 +199,10 @@ export default function HomeScreen() {
       </PressableScale>
     </SafeAreaView>
   );
-}
+ }
+
+ const enhance = withObservables([], () => ({
+  tasks: tasksCollection.query().observeWithColumns(['title', 'description', 'is_completed', 'priority', 'created_at', 'due_date'])
+}));
+ const EnhancedHomeScreen = enhance(HomeScreen);
+ export default EnhancedHomeScreen;
