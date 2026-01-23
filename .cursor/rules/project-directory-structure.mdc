@@ -1,0 +1,295 @@
+---
+description: Complete directory structure and important files guide for the Expo React Native project
+globs:
+alwaysApply: true
+---
+
+# Project Directory Structure Guide
+
+This guide outlines the complete directory structure and important files in the Expo React Native project, providing context for navigation and development.
+
+## Root Level Structure
+
+```
+expo-new-app/
+├── 📱 Platform-specific builds
+│   ├── android/              # Android native build files
+│   └── ios/                  # iOS native build files
+├── 🚀 Core Application
+│   ├── app/                  # Expo Router pages and layouts
+│   ├── components/           # Reusable UI components
+│   ├── api/                  # API layer and data fetching
+│   ├── db/                   # Database models and queries
+│   ├── utils/                # Utility functions and helpers
+│   ├── store/                # State management (Zustand)
+│   └── constants/            # App constants and configuration
+├── 🎨 Assets & Styling
+│   ├── assets/               # Images, icons, and static assets
+│   ├── global.css            # Global CSS styles
+│   └── tailwind.config.js    # Tailwind CSS configuration
+├── ⚙️ Configuration
+│   ├── app.json              # Expo app configuration
+│   ├── package.json          # Dependencies and scripts
+│   ├── tsconfig.json         # TypeScript configuration
+│   ├── babel.config.js       # Babel configuration
+│   ├── metro.config.js       # Metro bundler configuration
+│   └── eslint.config.js      # ESLint configuration
+└── 📚 Documentation & Misc
+    ├── README.md             # Project documentation
+    ├── OFFLINE_SYNC_GUIDE.md # Offline sync documentation
+    └── backup/               # Backup files
+```
+
+## Core Application Directories
+
+### 📱 `/app` - Expo Router Pages
+File-based routing system using Expo Router v6.
+
+```
+app/
+├── _layout.tsx               # Root layout component
+├── index.tsx                 # Home/landing page
+├── (tabs)/                   # Tab navigation group
+│   ├── _layout.tsx           # Tab layout configuration
+│   ├── index.tsx             # Home tab
+│   ├── tasks.tsx             # Tasks tab
+│   └── more.tsx              # More/settings tab
+├── create-task.tsx           # Task creation page
+└── edit-task/                # Task editing pages
+    ├── [id].tsx              # Dynamic task edit page
+    ├── task-comments.tsx     # Task comments page
+    └── task-media.tsx        # Task media page
+```
+
+**Key Features:**
+- Uses Expo Router for file-based routing
+- Tab navigation with grouped routes `(tabs)`
+- Dynamic routes with `[id].tsx` pattern
+- Nested layouts with `_layout.tsx` files
+
+### 🧩 `/components` - Reusable UI Components
+Modular components following React Native best practices.
+
+```
+components/
+├── AppHeaders/
+│   └── Header.tsx            # App header component
+├── TextInput/
+│   └── AppInput.tsx          # Custom input component
+├── HomeHeader.tsx            # Home screen header
+├── PriorityBar.tsx           # Priority indicator bar
+├── PriorityTag.tsx           # Priority tag component
+├── StatusFilter.tsx          # Status filtering component
+├── TaskCard.tsx              # Task display card
+└── Toast.tsx                 # Toast notification component
+```
+
+**Component Structure:**
+- Each complex component should have its own folder
+- Simple components can be single files
+- Follow naming convention: PascalCase for components
+- Include TypeScript interfaces for props
+
+### 🌐 `/api` - API Layer
+Centralized API management with React Query integration.
+
+```
+api/
+├── apiManager.ts             # Axios client configuration
+├── index.ts                  # API exports and initialization
+├── tasks/                    # Task-related APIs
+│   ├── api.ts                # Task API endpoints
+│   ├── mutations.ts          # Task mutations (React Query)
+│   ├── queries.ts            # Task queries (React Query)
+│   ├── comments/             # Task comments APIs
+│   │   ├── api.ts
+│   │   ├── mutations.ts
+│   │   └── queries.ts
+│   └── media/                # Task media APIs
+│       ├── api.ts
+│       ├── mutations.ts
+│       └── queries.ts
+└── types/
+    └── tasks.ts              # API type definitions
+```
+
+**API Architecture:**
+- Uses Axios for HTTP client
+- React Query (@tanstack/react-query) for data fetching
+- Organized by feature (tasks, comments, media)
+- Separate files for queries and mutations
+
+### 🗄️ `/db` - Database Layer
+WatermelonDB for local database management.
+
+```
+db/
+├── index.ts                  # Database initialization
+├── model/                    # Database models
+│   ├── schema.js             # Database schema definition
+│   ├── migrations.js         # Database migrations
+│   └── Task.js               # Task model definition
+└── queries/
+    └── taskApi.ts            # Database query functions
+```
+
+**Database Features:**
+- Uses WatermelonDB for offline-first architecture
+- Schema-based model definitions
+- Migration support for schema changes
+- Reactive database queries
+
+### 🛠️ `/utils` - Utility Functions
+Helper functions and shared utilities.
+
+```
+utils/
+├── dateHelpers.ts            # Date formatting and manipulation
+├── imageUpload.ts            # Image upload utilities
+├── supabase.ts               # Supabase client configuration
+└── sync.ts                   # Data synchronization utilities
+```
+
+### 🏪 `/store` - State Management
+Zustand store for global state management.
+
+```
+store/
+└── themeStore.ts             # Theme state management
+```
+
+### 📊 `/constants` - App Constants
+Application-wide constants and configuration.
+
+```
+constants/
+└── colors.ts                 # Color palette and theme colors
+```
+
+## Platform-Specific Directories
+
+### 🤖 `/android` - Android Build Files
+Native Android build configuration and generated files.
+
+```
+android/
+├── app/
+│   ├── build.gradle          # App-level Gradle configuration
+│   ├── src/main/             # Android source files
+│   └── build/                # Generated build files
+├── build.gradle              # Project-level Gradle configuration
+├── gradle/                   # Gradle wrapper files
+├── gradle.properties         # Gradle properties
+└── settings.gradle           # Gradle settings
+```
+
+### 🍎 `/ios` - iOS Build Files
+Native iOS build configuration and Xcode project files.
+
+```
+ios/
+├── exponewapp/               # iOS app source
+│   ├── AppDelegate.swift     # App delegate
+│   ├── Info.plist            # iOS app configuration
+│   └── Images.xcassets/      # iOS app icons and images
+├── exponewapp.xcodeproj/     # Xcode project file
+├── exponewapp.xcworkspace/   # Xcode workspace
+├── Podfile                   # CocoaPods dependencies
+└── Pods/                     # CocoaPods installed dependencies
+```
+
+## Configuration Files
+
+### 📋 Key Configuration Files
+
+| File | Purpose | Key Features |
+|------|---------|--------------|
+| `app.json` | Expo app configuration | App metadata, platform settings, plugins |
+| `package.json` | Node.js dependencies | Scripts, dependencies, project metadata |
+| `tsconfig.json` | TypeScript configuration | Compiler options, path mapping |
+| `tailwind.config.js` | Tailwind CSS setup | Custom theme, plugins, content paths |
+| `babel.config.js` | Babel transpilation | Presets, plugins, module resolution |
+| `metro.config.js` | Metro bundler setup | Asset resolution, transformer options |
+| `eslint.config.js` | Code linting rules | ESLint configuration and rules |
+
+### 🎨 `/assets` - Static Assets
+Images, icons, and other static resources.
+
+```
+assets/
+└── images/
+    ├── icon.png              # App icon
+    ├── favicon.png           # Web favicon
+    ├── splash-icon.png       # Splash screen icon
+    ├── android-icon-*.png    # Android adaptive icons
+    └── react-logo*.png       # React logo assets
+```
+
+## Development Guidelines
+
+### ✅ Best Practices
+
+1. **File Organization:**
+   - Keep related files together in feature folders
+   - Use consistent naming conventions (kebab-case for folders, PascalCase for components)
+   - Separate concerns (components, styles, types, logic)
+
+2. **Import Paths:**
+   - Use absolute imports for core directories
+   - Prefer index files for clean imports
+   - Group imports: external, internal, relative
+
+3. **Component Structure:**
+   ```typescript
+   // ✅ Good: Organized component structure
+   components/
+   ├── task-card/
+   │   ├── index.tsx         # Component logic
+   │   ├── styles.ts         # Component styles
+   │   └── types.ts          # Component types
+   ```
+
+4. **API Organization:**
+   ```typescript
+   // ✅ Good: Feature-based API organization
+   api/
+   ├── tasks/
+   │   ├── api.ts            # API endpoints
+   │   ├── queries.ts        # React Query queries
+   │   ├── mutations.ts      # React Query mutations
+   │   └── types.ts          # API types
+   ```
+
+### ❌ Common Mistakes to Avoid
+
+1. **Don't** place components directly in the root
+2. **Don't** mix platform-specific code in shared directories
+3. **Don't** ignore the established folder structure
+4. **Don't** create deeply nested folder structures without purpose
+
+## Technology Stack
+
+### Core Technologies
+- **React Native**: 0.81.5
+- **Expo**: ~54.0.31
+- **TypeScript**: ~5.9.2
+- **Expo Router**: ~6.0.21 (File-based routing)
+
+### State Management & Data
+- **Zustand**: ^5.0.10 (Global state)
+- **React Query**: ^5.90.17 (Server state)
+- **WatermelonDB**: ^0.28.0 (Local database)
+- **Supabase**: ^2.90.1 (Backend services)
+
+### UI & Styling
+- **NativeWind**: ^4.2.1 (Tailwind for React Native)
+- **Lucide React Native**: ^0.562.0 (Icons)
+- **React Native Reanimated**: ~4.1.1 (Animations)
+
+### Development Tools
+- **ESLint**: ^9.25.0 (Code linting)
+- **Babel**: Module resolution and transpilation
+- **Metro**: React Native bundler
+- **Sentry**: Error tracking and monitoring
+
+This structure supports a scalable, maintainable React Native application with offline capabilities, modern routing, and comprehensive tooling.

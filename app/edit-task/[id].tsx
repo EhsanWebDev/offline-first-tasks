@@ -16,7 +16,6 @@ import {
 import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
-import { useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -45,7 +44,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export default function EditTaskScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

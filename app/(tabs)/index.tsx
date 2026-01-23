@@ -19,14 +19,9 @@ import { database, tasksCollection } from "../../db";
  const HomeScreen = ({ tasks }: { tasks: TaskModel[] }) => {
   const router = useRouter();
 
-  const [refreshing, setRefreshing] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [filter, setFilter] = useState<FilterStatus>("All Tasks");
-
-  // const tasksCollection = database.get('tasks')
-  
-  console.log(tasks);
 
   const {
     isLoading: tasksLoading,

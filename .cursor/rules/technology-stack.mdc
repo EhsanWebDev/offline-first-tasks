@@ -1,0 +1,433 @@
+---
+description: Complete technology stack, dependencies, and best practices for the Expo React Native application
+globs:
+alwaysApply: true
+---
+
+# Technology Stack & Dependencies Guide
+
+This guide provides a comprehensive overview of the application's technology stack, dependency versions, and best practices for working with each major library.
+
+## 📱 Core Framework & Runtime
+
+### React & React Native
+- **React**: `19.1.0` - Latest stable React with improved concurrent features
+- **React Native**: `0.81.5` - Cross-platform mobile framework
+- **React DOM**: `19.1.0` - React web rendering (for Expo Web)
+- **React Native Web**: `~0.21.0` - Web compatibility layer
+
+**Best Practices:**
+- Use functional components with hooks exclusively
+- Leverage React 19's concurrent features for better performance
+- Use `React.memo()` for expensive component renders
+- Prefer `useMemo` and `useCallback` for optimization
+
+```typescript
+// ✅ Good: Optimized functional component
+const TaskCard = React.memo(({ task, onPress }: TaskCardProps) => {
+  const handlePress = useCallback(() => {
+    onPress(task.id);
+  }, [task.id, onPress]);
+
+  return <Pressable onPress={handlePress}>...</Pressable>;
+});
+
+// ❌ Bad: Unoptimized component with inline functions
+const TaskCard = ({ task, onPress }: TaskCardProps) => {
+  return <Pressable onPress={() => onPress(task.id)}>...</Pressable>;
+};
+```
+
+## 🚀 Expo Ecosystem (~54.0.31)
+
+### Core Expo Packages
+- **expo**: `~54.0.31` - Expo SDK framework
+- **expo-router**: `~6.0.21` - File-based routing system
+- **expo-dev-client**: `~6.0.20` - Custom development client
+- **expo-constants**: `~18.0.13` - Access to system and app constants
+- **expo-status-bar**: `~3.0.9` - Status bar configuration
+
+### Expo UI & Media
+- **expo-image**: `~3.0.11` - High-performance image component
+- **expo-image-picker**: `~17.0.10` - Image/video picker from device library
+- **expo-symbols**: `~1.0.8` - SF Symbols support (iOS)
+- **expo-splash-screen**: `~31.0.13` - Splash screen configuration
+
+### Expo System APIs
+- **expo-file-system**: `~19.0.21` - File system access
+- **expo-font**: `~14.0.10` - Custom font loading
+- **expo-haptics**: `~15.0.8` - Haptic feedback
+- **expo-linking**: `~8.0.11` - Deep linking and URL handling
+- **expo-system-ui**: `~6.0.9` - System UI configuration
+- **expo-web-browser**: `~15.0.10` - In-app browser
+
+**Best Practices:**
+- Always use `expo-image` instead of React Native's `Image` for better performance
+- Preload fonts in `_layout.tsx` before rendering UI
+- Use `expo-router` file-based routing - avoid manual navigation setup
+- Leverage `expo-constants` for environment-specific configuration
+
+```typescript
+// ✅ Good: Using expo-image with proper optimization
+import { Image } from 'expo-image';
+
+<Image
+  source={{ uri: task.imageUrl }}
+  contentFit="cover"
+  transition={200}
+  cachePolicy="memory-disk"
+  style={{ width: 100, height: 100 }}
+/>
+
+// ❌ Bad: Using React Native Image without optimization
+import { Image } from 'react-native';
+
+<Image
+  source={{ uri: task.imageUrl }}
+  style={{ width: 100, height: 100 }}
+/>
+```
+
+## 🧭 Navigation & Routing
+
+### Navigation Libraries
+- **expo-router**: `~6.0.21` - File-based routing (primary)
+- **@react-navigation/native**: `^7.1.8` - Navigation core
+- **@react-navigation/native-stack**: `^7.3.16` - Native stack navigation
+- **@react-navigation/bottom-tabs**: `^7.4.0` - Tab navigation
+- **@react-navigation/elements**: `^2.9.4` - Navigation UI elements
+- **react-native-screens**: `~4.16.0` - Native screen optimization
+- **react-native-safe-area-context**: `~5.6.0` - Safe area handling
+
+**Best Practices:**
+- Use Expo Router's file-based routing exclusively - don't mix with manual React Navigation
+- Group related routes with `()` parentheses syntax: `(tabs)/`
+- Use `[id].tsx` for dynamic routes
+- Always wrap content with `SafeAreaView` or use `useSafeAreaInsets()`
+
+```typescript
+// ✅ Good: Expo Router file structure
+app/
+├── _layout.tsx              // Root layout
+├── (tabs)/                  // Grouped tab routes
+│   ├── _layout.tsx
+│   └── index.tsx
+└── profile/[id].tsx         // Dynamic route
+
+// ❌ Bad: Manual navigation configuration with Expo Router
+// Don't manually configure navigators when using Expo Router
+```
+
+## 🎨 UI & Styling
+
+### Styling Framework
+- **nativewind**: `^4.2.1` - Tailwind CSS for React Native
+- **tailwindcss**: `^3.4.0` - Utility-first CSS framework
+- **react-native-css-interop**: `^0.2.1` - CSS compatibility layer
+
+### Icons & Vectors
+- **lucide-react-native**: `^0.562.0` - Beautiful icon set
+- **@expo/vector-icons**: `^15.0.3` - Icon library (backup)
+- **react-native-svg**: `15.12.1` - SVG support
+
+**Best Practices:**
+- Use NativeWind for all styling - avoid inline styles
+- Prefer Lucide icons for modern, consistent design
+- Always extract styles to separate files (`styles.ts`)
+- Use Tailwind utility classes for responsive design
+
+```typescript
+// ✅ Good: Using NativeWind with className
+import { View, Text } from 'react-native';
+import { Check } from 'lucide-react-native';
+
+const TaskCard = ({ task }: TaskCardProps) => (
+  <View className="bg-white rounded-lg p-4 shadow-md">
+    <View className="flex-row items-center gap-2">
+      <Check size={20} color="#10b981" />
+      <Text className="text-lg font-semibold text-gray-900">
+        {task.title}
+      </Text>
+    </View>
+  </View>
+);
+
+// ❌ Bad: Inline styles
+const TaskCard = ({ task }: TaskCardProps) => (
+  <View style={{ backgroundColor: 'white', borderRadius: 8, padding: 16 }}>
+    <Text style={{ fontSize: 18, fontWeight: '600' }}>
+      {task.title}
+    </Text>
+  </View>
+);
+```
+
+## ⚡ Animations & Gestures
+
+### Animation Libraries
+- **react-native-reanimated**: `~4.1.1` - High-performance animations
+- **react-native-gesture-handler**: `~2.28.0` - Native gesture handling
+- **react-native-worklets**: `0.5.1` - JavaScript worklets for animations
+- **pressto**: `^0.6.0` - Pressable component with animations
+
+**Best Practices:**
+- Use Reanimated for complex animations (runs on UI thread)
+- Use `react-native-gesture-handler` Pressable instead of React Native's
+- Leverage worklets for 60fps animations
+- Use `useAnimatedStyle` for animated styles
+
+```typescript
+// ✅ Good: Reanimated animation
+import { useAnimatedStyle, withSpring } from 'react-native-reanimated';
+
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ scale: withSpring(pressed.value ? 0.95 : 1) }],
+}));
+
+// ❌ Bad: Using Animated API (runs on JS thread)
+import { Animated } from 'react-native';
+// Avoid using legacy Animated API
+```
+
+## 🗄️ Data Management
+
+### State Management
+- **zustand**: `^5.0.10` - Lightweight state management
+- **@react-native-async-storage/async-storage**: `^2.2.0` - Persistent storage
+
+### Server State & Caching
+- **@tanstack/react-query**: `^5.90.17` - Powerful async state management
+- **axios**: `^1.13.2` - HTTP client
+
+### Local Database
+- **@nozbe/watermelondb**: `^0.28.0` - Reactive offline-first database
+
+### Backend
+- **@supabase/supabase-js**: `^2.90.1` - Backend-as-a-Service
+- **react-native-url-polyfill**: `^3.0.0` - URL polyfill for Supabase
+
+**Best Practices:**
+- Use Zustand for simple global state (theme, user preferences)
+- Use React Query for all server data fetching and caching
+- Use WatermelonDB for complex offline-first data
+- Never mix AsyncStorage with WatermelonDB for the same data
+
+```typescript
+// ✅ Good: Zustand store
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+interface ThemeStore {
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
+}
+
+export const useThemeStore = create<ThemeStore>()(
+  persist(
+    (set) => ({
+      theme: 'light',
+      setTheme: (theme) => set({ theme }),
+    }),
+    {
+      name: 'theme-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);
+
+// ✅ Good: React Query usage
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+const useTasks = () => {
+  return useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => api.tasks.getAll(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+const useCreateTask = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (task: CreateTaskDto) => api.tasks.create(task),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+};
+
+// ❌ Bad: Manual state management for server data
+const [tasks, setTasks] = useState([]);
+const [loading, setLoading] = useState(false);
+
+useEffect(() => {
+  setLoading(true);
+  fetchTasks().then(setTasks).finally(() => setLoading(false));
+}, []);
+```
+
+## 🛠️ Developer Tools
+
+### Code Quality
+- **typescript**: `~5.9.2` - Type safety
+- **eslint**: `^9.25.0` - Code linting
+- **eslint-config-expo**: `~10.0.0` - Expo ESLint config
+- **@tanstack/eslint-plugin-query**: `^5.91.2` - React Query linting
+
+### Build Tools
+- **babel-plugin-module-resolver**: `^5.0.2` - Module path aliasing
+- **@babel/plugin-proposal-decorators**: `^7.28.6` - Decorator support for WatermelonDB
+
+### Monitoring
+- **@sentry/react-native**: `~7.2.0` - Error tracking and performance monitoring
+
+**Best Practices:**
+- Enable strict mode in `tsconfig.json`
+- Never use `any` type - use `unknown` if type is truly unknown
+- Configure absolute imports with babel-plugin-module-resolver
+- Set up Sentry early for production error tracking
+
+```typescript
+// ✅ Good: Strong typing
+interface Task {
+  id: string;
+  title: string;
+  priority: 'low' | 'medium' | 'high';
+  createdAt: Date;
+}
+
+const processTask = (task: Task): string => {
+  return `${task.title} - ${task.priority}`;
+};
+
+// ❌ Bad: Weak typing
+const processTask = (task: any) => {
+  return `${task.title} - ${task.priority}`;
+};
+```
+
+## ⌨️ Input & Keyboard
+
+### Keyboard Management
+- **react-native-keyboard-controller**: `1.18.5` - Advanced keyboard handling
+
+**Best Practices:**
+- Use `KeyboardAvoidingView` for forms
+- Implement keyboard-aware scroll views
+- Handle keyboard dismiss on tap outside
+
+```typescript
+// ✅ Good: Keyboard-aware form
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+
+const CreateTaskScreen = () => (
+  <KeyboardAwareScrollView>
+    <View className="p-4">
+      <AppInput label="Task Title" />
+      <AppInput label="Description" multiline />
+    </View>
+  </KeyboardAwareScrollView>
+);
+```
+
+## 📅 Utilities
+
+### Date & Time
+- **dayjs**: `^1.11.19` - Modern date library
+- **@react-native-community/datetimepicker**: `8.4.4` - Native date/time picker
+
+**Best Practices:**
+- Always use dayjs instead of native Date for consistency
+- Store dates in ISO format in database
+- Display dates in user's local timezone
+
+```typescript
+// ✅ Good: Using dayjs
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
+
+const formatDate = (date: string) => dayjs(date).fromNow();
+const formatFull = (date: string) => dayjs(date).format('MMM DD, YYYY');
+
+// ❌ Bad: Using native Date
+const formatDate = (date: string) => new Date(date).toLocaleDateString();
+```
+
+## 🔧 Configuration Files
+
+### Essential Config Files
+- **app.json** - Expo app configuration
+- **babel.config.js** - Babel transpilation with decorators
+- **metro.config.js** - Metro bundler configuration
+- **tailwind.config.js** - Tailwind CSS configuration
+- **tsconfig.json** - TypeScript compiler options
+
+## 📦 Package Management
+
+**Package Manager**: `yarn@1.22.22`
+
+**Best Practices:**
+- Always use `yarn` (not npm) for consistency
+- Run `yarn install` after pulling new changes
+- Keep `yarn.lock` committed to version control
+- Use exact versions for critical dependencies
+
+```bash
+# ✅ Good: Install packages
+yarn add package-name
+yarn add -D dev-package-name
+
+# ❌ Bad: Using npm
+npm install package-name
+```
+
+## 🚀 Development Commands
+
+```bash
+# Start development server
+yarn start
+
+# Run on specific platforms
+yarn android          # Run on Android
+yarn ios             # Run on iOS
+yarn web             # Run on web browser
+
+# Code quality
+yarn lint            # Run ESLint
+```
+
+## 🏗️ Architecture Principles
+
+1. **Offline-First**: Use WatermelonDB + React Query for seamless offline/online sync
+2. **Type Safety**: Leverage TypeScript strictly - no `any` types
+3. **Performance**: Use Reanimated for animations, expo-image for images
+4. **Code Organization**: Follow feature-based structure in `/api`, `/components`, `/app`
+5. **State Management Hierarchy**:
+   - Local component state: `useState`, `useReducer`
+   - Global UI state: Zustand
+   - Server state: React Query
+   - Persistent data: WatermelonDB
+
+## 📚 Key Dependencies Summary
+
+| Category | Primary Tool | Version | Purpose |
+|----------|-------------|---------|---------|
+| Framework | React Native | 0.81.5 | Mobile framework |
+| Meta-Framework | Expo | ~54.0.31 | Development platform |
+| Routing | Expo Router | ~6.0.21 | File-based routing |
+| Styling | NativeWind | ^4.2.1 | Tailwind for RN |
+| State (Global) | Zustand | ^5.0.10 | Global state |
+| State (Server) | React Query | ^5.90.17 | Server state |
+| Database | WatermelonDB | ^0.28.0 | Offline database |
+| Backend | Supabase | ^2.90.1 | BaaS |
+| Animations | Reanimated | ~4.1.1 | UI animations |
+| HTTP | Axios | ^1.13.2 | API requests |
+| Icons | Lucide | ^0.562.0 | Icon library |
+| Dates | dayjs | ^1.11.19 | Date utilities |
+| Monitoring | Sentry | ~7.2.0 | Error tracking |
+
+This stack provides a modern, performant, and maintainable React Native application with excellent developer experience and production-ready features.
