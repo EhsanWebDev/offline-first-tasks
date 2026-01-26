@@ -1,8 +1,8 @@
-import { useCreateTask } from "@/api/tasks/mutations";
 import PriorityBar from "@/components/PriorityBar";
 import AppInput from "@/components/TextInput/AppInput";
 import { createTask } from "@/db/queries/taskApi";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRealm } from "@realm/react";
 import { useRouter } from "expo-router";
 import { Calendar, ChevronLeft, Plus, X } from "lucide-react-native";
 import { PressableScale } from "pressto";
@@ -23,18 +23,18 @@ import { formatDate } from "../utils/dateHelpers";
 
 export default function CreateTaskScreen() {
   const router = useRouter();
+  const realm = useRealm();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isPending, setIsPending] = useState(false);
 
   const [errors, setErrors] = useState<{
     title?: string;
     description?: string;
   }>({});
-
-  const { mutate: createTaskMutation, isPending } = useCreateTask();
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -45,15 +45,16 @@ export default function CreateTaskScreen() {
     setErrors({});
 
     try {
-       await createTask({
+      setIsPending(true);
+      await createTask(realm, {
         title: title.trim(),
         description: description.trim(),
         priority: priority,
         due_date: dueDate ? dueDate.getTime() : 0,
         is_completed: false,
         created_at: new Date().getTime(),
-       });
-       router.back();
+      });
+      router.back();
       
       // createTaskMutation(
       //   {
@@ -76,6 +77,7 @@ export default function CreateTaskScreen() {
       console.error(error);
       Alert.alert("Error", (error as Error).message);
     } finally {
+      setIsPending(false);
     }
   };
 

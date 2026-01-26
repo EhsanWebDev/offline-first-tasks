@@ -90,7 +90,7 @@ export default function TabLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="tasks" options={{ title: "Tasks" }} />
+      <Tabs.Screen name="tasks" options={{ title: "Local DB Inspector" }} />
 
       <Tabs.Screen name="more" options={{ title: "More" }} />
     </Tabs>

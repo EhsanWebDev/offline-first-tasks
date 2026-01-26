@@ -1,87 +1,130 @@
-import { synchronize } from '@nozbe/watermelondb/sync';
-import { database } from '../db'; // Your DB instance
-import { supabase } from '../utils/supabase'; // Your Supabase client
+import Realm from "realm";
+import { Task } from "../db/realm/schemas/Task";
+import { SyncState } from "../db/realm/schemas/SyncState";
+import { pushPendingChanges } from "./syncQueue";
+import { supabase } from "./supabase";
 
-export async function mySync() {
-  await synchronize({
-    database,
-    // 1. PULL: Get changes from Supabase
-    pullChanges: async ({ lastPulledAt, schemaVersion, migration }) => {
-      // 'lastPulledAt' is a timestamp (or null if first sync)
-      // If null, we fetch everything (0).
-      const lastSynced = lastPulledAt || 0;
+/**
+ * Get or create the singleton SyncState object
+ */
+const getSyncState = (realm: Realm): SyncState => {
+  let syncState = realm.objectForPrimaryKey<SyncState>("SyncState", "singleton");
+  if (!syncState) {
+    realm.write(() => {
+      syncState = realm.create<SyncState>("SyncState", {
+        id: "singleton",
+        lastSyncedAt: new Date(0),
+      });
+    });
+  }
+  return syncState!;
+};
 
-      // Query Supabase for changes since the last sync
-      const { data: tasks, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .gt('updated_at', new Date(lastSynced).toISOString()); // Assuming Postgres uses ISO strings
-    
-        
+/**
+ * Convert Supabase task to Realm Task format
+ */
+const supabaseTaskToRealm = (realm: Realm, supabaseTask: any): Task => {
+  // Check if task already exists by serverId or id
+  let task = realm.objects<Task>("Task").filtered("serverId == $0", supabaseTask.id)[0] || 
+             realm.objects<Task>("Task").filtered("id == $0", supabaseTask.id)[0] || 
+             null;
 
-      if (error) throw new Error(error.message);
+  const taskData = {
+    _id: task?._id || new Realm.BSON.ObjectId(),
+    id: supabaseTask.id, // Use Supabase UUID as the id
+    title: supabaseTask.title,
+    description: supabaseTask.description || undefined,
+    due_date: supabaseTask.due_date ? new Date(supabaseTask.due_date) : undefined,
+    is_completed: supabaseTask.is_completed,
+    priority: supabaseTask.priority,
+    created_at: new Date(supabaseTask.created_at),
+    updated_at: new Date(supabaseTask.updated_at),
+    sync_status: "synced" as const,
+    sync_error_message: undefined,
+    serverId: supabaseTask.id, // Store Supabase UUID as serverId
+    comments: [], // Comments/media will be handled separately if needed
+    media: [],
+    commentsCount: supabaseTask.task_comments?.[0]?.count || 0,
+    mediaCount: supabaseTask.task_media?.[0]?.count || 0,
+  };
 
-      // Format for WatermelonDB
-      // We must separate 'created' from 'updated'. 
-      // Simplified strategy: Treat everything as 'updated' (Watermelon handles the diff if ID matches)
-      // OR stricter: Check created_at vs updated_at.
-      
-      return {
-        changes: {
-          tasks: {
-            created: [], // Optional: You can put new items here if you filter by created_at
-            updated: tasks || [], // Watermelon is smart enough to create if it doesn't exist
-            deleted: [], // Handling deletes requires a 'deleted_at' column or a separate 'deleted_tasks' table
-          },
-        },
-        timestamp: new Date().getTime(), // New reference point
-      };
-    },
+  if (task) {
+    // Update existing task
+    realm.write(() => {
+      Object.assign(task, taskData);
+    });
+    return task;
+  } else {
+    // Create new task
+    let newTask: Task;
+    realm.write(() => {
+      newTask = realm.create<Task>("Task", taskData);
+    });
+    return newTask!;
+  }
+};
 
-    // 2. PUSH: Send local changes to Supabase
-    pushChanges: async ({ changes, lastPulledAt }) => {
-      const { tasks } = changes;
+/**
+ * Pull tasks from Supabase and upsert into Realm
+ */
+const pullTasks = async (realm: Realm, lastSyncedAt: Date): Promise<void> => {
+  console.log(`📥 Pulling tasks since: ${lastSyncedAt.toISOString()}`);
 
-      // A. Handle Created
-      if (tasks.created.length > 0) {
-        // Must strip _status, _changed, etc. before sending to Supabase
-        const records = tasks.created.map(entry => ({
-          id: entry.id,
-          title: entry.title,
-          is_completed: entry.is_completed,
-          created_at: new Date(entry.created_at).toISOString(),
-          updated_at: new Date().toISOString(),
-          // Add other fields...
-        }));
-        
-        const { error } = await supabase.from('tasks').insert(records);
-        if (error) throw new Error('Push create failed: ' + error.message);
-      }
+  let query = supabase
+    .from("tasks")
+    .select("*, task_comments(count), task_media(count)")
+    .order("created_at", { ascending: false });
 
-      // B. Handle Updated
-      if (tasks.updated.length > 0) {
-        for (const entry of tasks.updated) {
-          const { error } = await supabase
-            .from('tasks')
-            .update({ 
-              title: entry.title, 
-              is_completed: entry.is_completed, 
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', entry.id);
-            
-          if (error) throw new Error('Push update failed: ' + error.message);
-        }
-      }
+  if (lastSyncedAt.getTime() > 0) {
+    // Delta sync - fetch only updated tasks
+    query = query.gt("updated_at", lastSyncedAt.toISOString());
+  }
 
-      // C. Handle Deleted
-      if (tasks.deleted.length > 0) {
-        // We usually don't "hard delete" in offline-first apps.
-        // We set a 'deleted_at' flag. But if you want hard delete:
-        const ids = tasks.deleted;
-        const { error } = await supabase.from('tasks').delete().in('id', ids);
-        if (error) throw new Error('Push delete failed: ' + error.message);
-      }
-    },
-  });
+  const { data: supabaseTasks, error } = await query;
+
+  if (error) {
+    console.error("❌ Pull error:", error);
+    throw new Error(`Pull failed: ${error.message}`);
+  }
+
+  console.log(`✅ Pulled ${supabaseTasks?.length || 0} tasks from Supabase`);
+
+  // Upsert tasks into Realm
+  if (supabaseTasks && supabaseTasks.length > 0) {
+    realm.write(() => {
+      supabaseTasks.forEach((supabaseTask) => {
+        supabaseTaskToRealm(realm, supabaseTask);
+      });
+    });
+  }
+};
+
+/**
+ * Main sync function: push local changes, then pull remote changes
+ */
+export async function mySync(realm: Realm): Promise<void> {
+  console.log("🔄 Starting Realm <-> Supabase sync...");
+
+  try {
+    // 1. PUSH: Send local pending changes to Supabase
+    console.log("📤 Pushing local changes...");
+    const pushResult = await pushPendingChanges(realm);
+    console.log(
+      `✅ Push complete: ${pushResult.success} succeeded, ${pushResult.failed} failed`
+    );
+
+    // 2. PULL: Fetch remote changes and update local Realm
+    const syncState = getSyncState(realm);
+    await pullTasks(realm, syncState.lastSyncedAt);
+
+    // 3. Update lastSyncedAt
+    realm.write(() => {
+      syncState.lastSyncedAt = new Date();
+    });
+
+    console.log("🎉 Sync completed successfully!");
+  } catch (error) {
+    console.error("❌ Sync error:", error);
+    throw error;
+  }
 }

@@ -1,13 +1,10 @@
-import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
-import { useTaskMediaByTaskId } from "@/api/tasks/media/queries";
-import { useDeleteTask, useUpdateTask } from "@/api/tasks/mutations";
 import Header from "@/components/AppHeaders/Header";
 import PriorityBar from "@/components/PriorityBar";
 import { Priority } from "@/components/PriorityTag";
 import AppInput from "@/components/TextInput/AppInput";
-import { database } from "@/db";
-import Task from "@/db/model/Task";
-import { getTaskById } from "@/db/queries/taskApi";
+import { deleteTask, updateTaskWithSyncStatus } from "@/db/queries/taskApi";
+import { useQuery, useRealm } from "@/db/realm";
+import { JsonTask } from "@/db/realm/schemas/Json/Task";
 import { formatDate } from "@/utils/dateHelpers";
 import {
   deleteImageFromSupabase,
@@ -24,7 +21,7 @@ import {
   MessageCircle,
   Save,
   Trash2,
-  X
+  X,
 } from "lucide-react-native";
 import { PressableScale } from "pressto";
 import { useEffect, useState } from "react";
@@ -41,9 +38,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-export default function EditTaskScreen() {
+const EditTaskScreen = () => {
   const router = useRouter();
+  const realm = useRealm();
   const { id } = useLocalSearchParams();
+
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -55,49 +54,48 @@ export default function EditTaskScreen() {
     description?: string;
   }>({});
 
-  const { data: comments } = useTaskCommentsByTaskId(Number(id));
-  const { data: media } = useTaskMediaByTaskId(Number(id));
-  const commentsCount = comments?.length ?? 0;
-  const mediaCount = media?.length ?? 0;
+  // Get task from Realm (live query)
+  const taskQuery = useQuery<JsonTask>(JsonTask).filtered("_id == $0", id);
+  const theTask = taskQuery.length > 0 ? taskQuery[0] : null;
+
+  // Get comments and media from embedded arrays
+  const commentsCount =
+    theTask?.commentsCount ?? theTask?.comments?.length ?? 0;
+  const mediaCount = theTask?.mediaCount ?? theTask?.media?.length ?? 0;
   const hasComments = commentsCount > 0;
-  const hasMedia = media?.length && media?.length > 0;
-  const { mutate: updateTaskMutation, isPending } = useUpdateTask();
-  // const { data: theTask } = useTaskById(id as string);
+  const hasMedia = mediaCount > 0;
 
-  const [theTask, setTheTask] = useState<Task | null>(null);
-
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
-    if (id) {
-      getTaskById(id as string).then((task) => {
-        setTitle(task?.title || "");
-        setDescription(task?.description || "");
-        setPriority(task?.priority as Priority || "medium");
-        setDueDate(task?.due_date || null);
-        setTheTask(task);
-      });
+    if (theTask) {
+      setTitle(theTask.title || "");
+      setDescription(theTask.description || "");
+      setPriority((theTask.priority as Priority) || "medium");
+      setDueDate(
+        theTask.due_date ? new Date(theTask.due_date).getTime() : null,
+      );
     }
-  }, [id]);
+  }, [theTask]);
 
   // Extract is_completed to preserve it during update
   const is_completed = theTask?.is_completed ?? false;
-  const [imageUrl, setImageUrl] = useState<string | null>(theTask?.image_url ?? null);
-
-  const { mutate: removeTaskMutation, isPending: isRemoveTaskPending } =
-    useDeleteTask();
 
   const handleUpdate = async () => {
+    if (!theTask) return;
+
     setIsLoading(true);
-    await database.write(async () => {
-      await theTask?.update((task) => {
-        task.title = title.trim();
-        task.description = description?.trim();
-        task.priority = priority;
-        task.due_date = dueDate ? dueDate : 0;
-        task.is_completed = is_completed;
-      });
+    setIsPending(true);
+    await updateTaskWithSyncStatus(realm, theTask, {
+      title: title.trim(),
+      description: description?.trim(),
+      priority: priority,
+      due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+      is_completed: is_completed,
     });
     setIsLoading(false);
+    setIsPending(false);
+    router.back();
     // setIsLoading(true);
     // let imageUrlFromSupabase = null;
     // if (imageUrl) {
@@ -135,10 +133,9 @@ export default function EditTaskScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-
-          await database.write(async () => {
-            await theTask?.destroyPermanently();
-          });
+          if (theTask) {
+            await deleteTask(realm, theTask);
+          }
           router.back();
           // removeTaskMutation(id as string, {
           //   onSuccess: async () => {
@@ -163,7 +160,7 @@ export default function EditTaskScreen() {
   // Handler for Android Date Picker
   const onAndroidDateChange = (
     event: DateTimePickerEvent,
-    selectedDate?: Date
+    selectedDate?: Date,
   ) => {
     setShowDatePicker(false);
     if (selectedDate) {
@@ -200,29 +197,18 @@ export default function EditTaskScreen() {
         }
       }
       const imageUrlFromSupabase = await uploadImageToSupabase(
-        result.assets[0].uri
+        result.assets[0].uri,
       );
-      setImageUrl(imageUrlFromSupabase);
-      updateTaskMutation(
-        {
-          id: id as string,
-          image_url: imageUrlFromSupabase ?? undefined,
+      if (theTask) {
+        await updateTaskWithSyncStatus(realm, theTask, {
           title: title.trim(),
           description: description?.trim(),
           priority: priority,
-          due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+          due_date: dueDate ? dueDate : 0,
           is_completed: is_completed,
-        },
-        {
-          onSuccess: () => {
-            router.back();
-          },
-          onError: (error) => {
-            console.error(error);
-            Alert.alert("Error", (error as Error).message);
-          },
-        }
-      );
+        });
+        router.back();
+      }
     }
   };
 
@@ -237,7 +223,7 @@ export default function EditTaskScreen() {
           headerRight={
             <PressableScale
               onPress={handleDelete}
-              enabled={!isRemoveTaskPending}
+              enabled={!isLoading}
               style={{
                 backgroundColor: "rgba(0,0,0,0.05)",
                 borderRadius: 100,
@@ -248,7 +234,7 @@ export default function EditTaskScreen() {
                 justifyContent: "center",
               }}
             >
-              {isRemoveTaskPending ? (
+              {isLoading ? (
                 <ActivityIndicator color="#EF4444" />
               ) : (
                 <Trash2 size={24} color="#EF4444" />
@@ -468,4 +454,6 @@ export default function EditTaskScreen() {
       </SafeAreaView>
     </View>
   );
-}
+};
+
+export default EditTaskScreen;

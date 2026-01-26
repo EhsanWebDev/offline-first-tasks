@@ -1,116 +1,88 @@
-# Offline-first plan (WatermelonDB + Supabase)
+# Offline-first plan (RealmDB + DynamoDB Backend)
 
-## Current state (critical analysis)
+## Current state (after migration to Realm)
 
-- **Offline-first direction is correct**: UI is starting to read/write via WatermelonDB (e.g. local create/update), and you’ve drafted a `synchronize()`-based sync function.
-- **But the implementation is currently inconsistent / incomplete**, so “delta sync” can’t be correct yet:
-  - **Sync isn’t called anywhere**: `utils/sync.ts` exports `mySync()` but nothing invokes it.
-  - **Schema mismatch vs delta sync**:
-    - Your guide and sync code assume `updated_at` exists; local schema/model do not.
-    - `db/model/schema.js` + `db/model/Task.js` currently have **no `updated_at`**, no `deleted_at`, and also miss fields your UI references (e.g. `image_url`).
-  - **ID compatibility risk**:
-    - Supabase expects `tasks.id` as `uuid` (per your guide), but WatermelonDB will auto-generate a non-UUID string unless you explicitly set it.
-  - **Type mismatch risk on dates**:
-    - Local uses numbers (ms), Supabase tables typically use `timestamptz` strings. Your current `pullChanges` returns raw Supabase rows without converting types.
-  - **UI still hits Supabase directly**:
-    - `api/tasks/*` fetches tasks from Supabase with React Query, and `app/(tabs)/index.tsx` still calls `useTasks()` (even though the list is WatermelonDB-driven).
-  - **Deletes aren’t sync-safe**:
-    - `destroyPermanently()` removes locally immediately; for offline-first you generally want `markAsDeleted()` + server-side tombstones (`deleted_at`) + pull deleted IDs.
+- **Offline-first architecture**: UI reads/writes via RealmDB (local source of truth).
+- **Sync engine**: Custom push-then-pull sync with DynamoDB backend.
+- **Document-style data**: Tasks contain embedded `comments[]` and `media[]` arrays, matching DynamoDB structure.
 
-## Target architecture
+## Architecture
 
-- **Local DB is the single source of truth**: screens read from WatermelonDB only.
-- **Sync engine is the only layer talking to Supabase**.
-- **Delta sync** based on server-authored `updated_at` and `deleted_at`.
+- **Local DB is the single source of truth**: screens read from RealmDB only.
+- **Sync engine is the only layer talking to backend**.
+- **Delta sync** based on server-authored `updatedAt` and `deletedAt`.
 ```mermaid
 flowchart LR
-  UI[UI_Screens] --> WMDB[WatermelonDB_Local]
+  UI[UI_Screens] --> RealmDB[RealmDB_Local]
   UI --> SyncState[SyncStatus_UI]
-  SyncEngine[SyncEngine] <--> WMDB
-  SyncEngine <--> Supabase[(Supabase_Postgres+Storage)]
+  SyncEngine[SyncEngine] <--> RealmDB
+  SyncEngine <--> Backend[(DynamoDB_Backend)]
   NetInfo[Connectivity] --> SyncEngine
   AppState[AppLifecycle] --> SyncEngine
 ```
 
+## Implementation details
 
-## Plan (recommended path: keep WatermelonDB + improve)
+### Realm Schema
+- **Task**: Main object with embedded arrays for comments and media
+- **TaskCommentEmbedded**: Embedded object (not a separate table)
+- **TaskMediaEmbedded**: Embedded object (not a separate table)
+- **SyncState**: Singleton object storing `lastSyncedAt`
 
-### 1) Make the schema sync-capable (required)
+### Sync Status Flow
+1. **Create**: `sync_status = "pending_creation"` → Push to backend → `sync_status = "synced"`, store `serverId`
+2. **Update**: If `sync_status !== "pending_creation"`, set to `"pending_update"` → Push → `"synced"`
+3. **Error**: On push failure → `sync_status = "sync_error"`, store error message
+4. **Retry**: User can retry from sync queue screen
 
-- **Add required columns locally** (WatermelonDB):
-  - `updated_at` (number, required)
-  - `deleted_at` (number, optional) OR rely on Watermelon’s deletion status + server tombstones
-  - any fields you already use in UI/sync: `image_url`, and ensure `due_date` is optional if it can be empty
-- **Bump Watermelon schema version + add migrations**.
-- **Update models** to include the new fields.
+### Date Handling
+- Realm stores dates as `Date` objects
+- Backend API uses ISO string format
+- Conversion happens at API boundary
 
-### 2) Make Supabase schema sync-capable (required)
+### ID Strategy
+- Client generates UUID v4 for new tasks (`id` field)
+- Backend returns server-assigned ID after first sync (`serverId` field)
+- Both `id` and `serverId` are indexed for fast lookups
 
-- **Ensure server has**:
-  - `updated_at timestamptz not null default now()`
-  - `deleted_at timestamptz null` (for soft delete)
-- **Add trigger(s)** to always update `updated_at = now()` on UPDATE.
-- **Decide delete semantics**:
-  - Recommended: soft delete by setting `deleted_at`.
+## Sync Protocol
 
-### 3) Fix IDs (required)
+### Push (Local → Remote)
+1. Query Realm for tasks with `sync_status` in `[pending_creation, pending_update, sync_error]`
+2. For each task:
+   - `pending_creation` → `POST /tasks`
+   - `pending_update` → `PUT /tasks/:serverId`
+3. On success: mark as `synced`, store `serverId`
+4. On failure: mark as `sync_error`, store error message
 
-- Ensure **client-generated IDs are UUID v4** (so offline-created tasks can be inserted remotely).
-- Recommended packages/approach:
-  - **`uuid` + `expo-crypto`** using `getRandomValues()` to generate UUID v4 reliably in Expo.
+### Pull (Remote → Local)
+1. Get `lastSyncedAt` from `SyncState` singleton
+2. Call `GET /tasks?updatedSince=ISO_DATE`
+3. Upsert tasks into Realm (create if not exists, update if exists)
+4. Update `lastSyncedAt` in `SyncState`
 
-### 4) Implement correct pull/push transformations (required)
+## Backend API Requirements
 
-- **Pull**: convert Supabase rows → Watermelon raw records
-  - Convert `created_at`, `updated_at`, `due_date`, `deleted_at` from ISO → ms number.
-  - Return `changes` split into `created/updated` if you can; otherwise ensure “everything in updated” is still type-correct and safe.
-  - Return a **server-derived `timestamp`** (avoid `Date.now()` if possible; clock skew can break delta sync).
-- **Push**:
-  - Prefer batching: upsert for created/updated (with server-side `updated_at`), and soft-delete update for deleted.
-  - Avoid per-row update loops where possible.
-  - Add retry/backoff and “stop on conflict” behavior.
+The backend must provide:
+- `POST /tasks` - Create new task (returns task with server-generated `id`)
+- `PUT /tasks/:id` - Update existing task
+- `DELETE /tasks/:id` - Delete task (or soft delete)
+- `GET /tasks?updatedSince=ISO_DATE` - Fetch tasks updated since timestamp
+- `GET /tasks` - Fetch all tasks (for initial sync)
 
-### 5) Wire sync into the app lifecycle (required)
+All endpoints should accept/return tasks with embedded `comments[]` and `media[]` arrays matching the Realm schema structure.
 
-- Run sync:
-  - on app start
-  - when app returns to foreground
-  - when connectivity becomes online
-  - via manual pull-to-refresh
-- Track sync state in a small store (e.g. Zustand): lastSyncedAt, isSyncing, lastError.
+## Migration Notes
 
-### 6) Remove remaining direct Supabase usage from UI (required)
-
-- Tasks screens should:
-  - read from WatermelonDB observers (`withObservables` / `observeWithColumns`)
-  - write via `database.write()` only
-- React Query for tasks should be removed or repurposed:
-  - If you keep React Query, limit it to **sync-only endpoints** (not direct UI reads).
-
-### 7) Expand offline-first beyond tasks (next)
-
-- If comments/media must work offline:
-  - add local tables + sync for `task_comments` and `task_media`
-  - decide storage strategy for media:
-    - store local file references + upload queue
-    - store remote `image_url` after upload completes
-
-## Alternative option (if you want “turnkey” local-first replication)
-
-If you want less custom sync code and more “database replication” semantics, evaluate a Postgres-local-first sync layer:
-
-- **PowerSync** (popular with Supabase/Postgres stacks): local SQLite + incremental sync.
-- **ElectricSQL** (Postgres replication model): local-first primitives.
-
-This path can reduce custom sync complexity (server timestamps, batching, conflict checks), but adds a new platform dependency and operational model.
+- Migrated from WatermelonDB to RealmDB
+- Local data was wiped during migration (no migration path)
+- All tasks will be re-synced from backend on first sync
+- Ensure backend has all existing data before switching
 
 ## Acceptance criteria
 
 - App works fully offline for tasks create/update/delete.
-- On reconnection, changes sync both ways with correct `updated_at` ordering.
-- Deletes propagate across devices (via `deleted_at` tombstones).
-- No UI screen reads tasks directly from Supabase.
-
-## File placement
-
-- This plan is intended to be saved at: `plans/offline-first/plan1.md` (repo root at `expo-new/plans/`).
+- On reconnection, changes sync both ways with correct `updatedAt` ordering.
+- Deletes propagate across devices (via `deletedAt` tombstones or delete log).
+- No UI screen reads tasks directly from backend API.
+- Sync queue screen shows pending items and allows retry.

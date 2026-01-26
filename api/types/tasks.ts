@@ -12,6 +12,21 @@ export interface Task {
   task_media?: { count: number }[];
 }
 
+export interface TaskRow {
+  id: number;
+  json: {
+    title: string;
+    description?: string;
+    is_completed: boolean;
+    priority: "low" | "medium" | "high";
+    due_date?: string;
+    created_at: string;
+    images?: string[];
+    comments_count?: number;
+    media_count?: number;
+  };
+}
+
 export interface TaskComment {
   id: number;
   content: string;

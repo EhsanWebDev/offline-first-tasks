@@ -1,33 +1,36 @@
-import { useUpdateTask } from "@/api/tasks/mutations";
-import { useTasks } from "@/api/tasks/queries";
 import { Priority } from "@/api/types/tasks";
 import HomeHeader from "@/components/HomeHeader";
-import { default as Task, default as TaskModel } from "@/db/model/Task";
-import { withObservables } from '@nozbe/watermelondb/react';
+import SyncLoadingBar from "@/components/SyncLoadingBar";
+import { updateTaskWithSyncStatus } from "@/db/queries/taskApi";
+import { useQuery, useRealm } from "@/db/realm";
+import { JsonTask } from "@/db/realm/schemas/Json/Task";
+import { Task } from "@/db/realm/schemas/Task";
+import { SyncManager } from "@/services/SyncManager";
 import { useRouter } from "expo-router";
 import { Plus } from "lucide-react-native";
 import { PressableScale } from "pressto";
-import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, FlatList, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import StatusFilter, { FilterStatus } from "../../components/StatusFilter";
 import TaskCard from "../../components/TaskCard";
 import Toast from "../../components/Toast";
-import { database, tasksCollection } from "../../db";
+import { mySync } from "../../utils/sync";
 
- const HomeScreen = ({ tasks }: { tasks: TaskModel[] }) => {
+const HomeScreen = () => {
   const router = useRouter();
+  const realm = useRealm();
+
+  // Get all tasks from Realm (live query)
+  const tasks = useQuery<JsonTask>(JsonTask).filtered(
+    "sync_status != 'pending_delete'",
+  );
 
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [filter, setFilter] = useState<FilterStatus>("All Tasks");
-
-  const {
-    isLoading: tasksLoading,
-  } = useTasks();
-
-  const { mutate: updateTaskMutation } = useUpdateTask();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // const onRefresh = useCallback(() => {
   //   setRefreshing(true);
@@ -43,51 +46,64 @@ import { database, tasksCollection } from "../../db";
     setTimeout(() => setToastVisible(false), 2000);
   };
 
-  const handleToggleTask = async (task: Task) => {
+  const handleRefresh = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      // First: Push any local changes UP
+      await SyncManager.processSyncQueue(realm);
+
+      // Second: Pull any remote changes DOWN
+      await SyncManager.pullFromCloud(realm);
+    } catch (error) {
+      Alert.alert("Sync Error", "Could not update tasks.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [realm]);
+
+  const handleSync = async () => {
+    if (isSyncing) return;
+
+    setIsSyncing(true);
+    try {
+      console.log("Starting sync...");
+      await mySync(realm);
+      console.log("Sync completed successfully");
+      showToast("✓ Tasks synced successfully");
+    } catch (error) {
+      console.error("Sync error:", error);
+      showToast("✗ Sync failed. Please try again.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleToggleTask = async (task: JsonTask) => {
     const newStatus = !task.is_completed;
 
-    await database.write(async () => {
-      await task.update((t) => {
-        t.is_completed = newStatus;
-      });
+    await updateTaskWithSyncStatus(realm, task, {
+      is_completed: newStatus,
     });
 
-    // updateTaskMutation(
-    //   {
-    //     title: task.title,
-    //     priority: task.priority as "low" | "medium" | "high",
-    //     description: task.description ?? undefined,
-    //     due_date: task.due_date ?? undefined,
-    //     id: task.id,
-    //     is_completed: newStatus,
-    //   },
-    //   {
-    //     onSuccess: () => {
-    //       showToast(newStatus ? "Task completed " : "Task updated");
-    //     },
-    //     onError: (error) => {
-    //       console.error(error);
-    //     },
-    //   }
-    // );
+    showToast(newStatus ? "Task completed" : "Task updated");
   };
 
   const filteredTasks = useMemo(() => {
-    if (!tasks) return [];
-    if (filter === "All Tasks") return tasks;
-    if (filter === "Ongoing") return tasks.filter((t) => !t.is_completed);
-    if (filter === "Completed") return tasks.filter((t) => t.is_completed);
-    return tasks;
+    const tasksArray = Array.from(tasks);
+    if (filter === "All Tasks") return tasksArray;
+    if (filter === "Ongoing") return tasksArray.filter((t) => !t.is_completed);
+    if (filter === "Completed") return tasksArray.filter((t) => t.is_completed);
+    return tasksArray;
   }, [tasks, filter]);
 
-  const counts = useMemo(
-    () => ({
-      all: (tasks ?? []).length,
-      ongoing: (tasks ?? []).filter((t) => !t.is_completed).length,
-      completed: (tasks ?? []).filter((t) => t.is_completed).length,
-    }),
-    [tasks]
-  );
+  const counts = useMemo(() => {
+    const tasksArray = Array.from(tasks);
+    return {
+      all: tasksArray.length,
+      ongoing: tasksArray.filter((t) => !t.is_completed).length,
+      completed: tasksArray.filter((t) => t.is_completed).length,
+    };
+  }, [tasks]);
 
   const renderItem = ({ item, index }: { item: Task; index: number }) => {
     return (
@@ -100,8 +116,8 @@ import { database, tasksCollection } from "../../db";
           description={item.description ?? ""}
           isCompleted={item.is_completed}
           priority={item.priority as Priority}
-          commentsCount={item.task_comments?.[0]?.count ?? 0}
-          mediaCount={item.task_media?.[0]?.count ?? 0}
+          commentsCount={item.commentsCount ?? item.comments?.length ?? 0}
+          mediaCount={item.mediaCount ?? item.media?.length ?? 0}
           createdAt={
             item.created_at ? new Date(item.created_at).getTime() : undefined
           }
@@ -109,10 +125,46 @@ import { database, tasksCollection } from "../../db";
             item.due_date ? new Date(item.due_date).getTime() : undefined
           }
           onToggle={() => handleToggleTask(item)}
-          onPress={() => router.push(`/edit-task/${item.id}`)}
+          onPress={() => router.push(`/edit-task/${item._id}`)}
         />
       </Animated.View>
     );
+  };
+
+  const handleCreateTask = async () => {
+    // Generate a Temporary Negative ID
+    // Using Date.now() ensures uniqueness locally.
+    // We negate it to distinguish from real DB IDs.
+    const tempId = -Date.now();
+
+    const newTaskData = {
+      _id: tempId,
+      title: "New Task From Local DB",
+      description: "This is a new task from Local DB",
+      due_date: new Date().toISOString(),
+      is_completed: true,
+      priority: "high",
+      created_at: new Date().toISOString(),
+      images: [],
+      media_count: 0,
+      comments_count: 0,
+      sync_status: "pending_creation",
+    };
+
+    // 1. Optimistic Save (Instant UI update)
+    realm.write(() => {
+      realm.create("JsonTask", newTaskData);
+    });
+
+    // 2. Trigger Sync Background Process
+    // In a real app, this should be in a useEffect or a queue system
+    // try {
+    //   await SyncManager.processSyncQueue(realm);
+    //   showToast("✓ Task created successfully");
+    // } catch (error) {
+    //   console.error("Sync error:", error);
+    //   showToast("✗ Sync failed. Please try again.");
+    // }
   };
 
   return (
@@ -120,9 +172,11 @@ import { database, tasksCollection } from "../../db";
       className="flex-1 bg-gray-50"
       edges={["top", "left", "right"]}
     >
+      <SyncLoadingBar isVisible={isSyncing} />
+
       {/* <StatusBar style="dark" /> */}
       <View className="flex-1">
-        <HomeHeader />
+        <HomeHeader onSyncPress={handleRefresh} isSyncing={isSyncing} />
 
         <StatusFilter
           currentFilter={filter}
@@ -130,54 +184,43 @@ import { database, tasksCollection } from "../../db";
           counts={counts}
         />
 
-       
-        {tasksLoading ? (
-          // Loading View
-          <View className="flex-1 justify-center items-center">
-            <ActivityIndicator size="large" color="#4F46E5" />
-            <Text className="text-gray-400 mt-4 font-medium">
-              Loading your tasks...
-            </Text>
-          </View>
-        ) : (
-          // Data List
-          <FlatList
-            data={filteredTasks}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            ListEmptyComponent={
-              <View className="flex-1 justify-center items-center mt-20">
-                <Text className="text-gray-400 text-lg">
-                  {filter === "Completed"
-                    ? "No completed tasks yet"
-                    : "No tasks found"}
-                </Text>
-              </View>
-            }
-            contentContainerStyle={{
-              paddingHorizontal: 24,
-              paddingBottom: 180,
-              // paddingTop: 10,
-              flexGrow: 1, // Ensures empty state stays centered
-            }}
-            showsVerticalScrollIndicator={false}
-            // refreshControl={
-            //   <RefreshControl
-            //     refreshing={refreshing}
-            //     onRefresh={onRefresh}
-            //     tintColor="#4F46E5" // iOS spinner color
-            //     colors={["#4F46E5"]} // Android spinner color
-            //   />
-            // }
-          />
-        )}
+        {/* Data List */}
+        <FlatList
+          data={filteredTasks}
+          keyExtractor={(item) => item._id.toString()}
+          renderItem={renderItem}
+          ListEmptyComponent={
+            <View className="flex-1 justify-center items-center mt-20">
+              <Text className="text-gray-400 text-lg">
+                {filter === "Completed"
+                  ? "No completed tasks yet"
+                  : "No tasks found"}
+              </Text>
+            </View>
+          }
+          contentContainerStyle={{
+            paddingHorizontal: 24,
+            paddingBottom: 180,
+            // paddingTop: 10,
+            flexGrow: 1, // Ensures empty state stays centered
+          }}
+          showsVerticalScrollIndicator={false}
+          // refreshControl={
+          //   <RefreshControl
+          //     refreshing={refreshing}
+          //     onRefresh={onRefresh}
+          //     tintColor="#4F46E5" // iOS spinner color
+          //     colors={["#4F46E5"]} // Android spinner color
+          //   />
+          // }
+        />
       </View>
 
       <Toast message={toastMessage} visible={toastVisible} />
 
-    
       <PressableScale
-        onPress={() => router.push("/create-task")}
+        // onPress={() => router.push("/create-task")}
+        onPress={handleCreateTask}
         style={{
           position: "absolute",
           bottom: 110,
@@ -194,10 +237,6 @@ import { database, tasksCollection } from "../../db";
       </PressableScale>
     </SafeAreaView>
   );
- }
+};
 
- const enhance = withObservables([], () => ({
-  tasks: tasksCollection.query().observeWithColumns(['title', 'description', 'is_completed', 'priority', 'created_at', 'due_date'])
-}));
- const EnhancedHomeScreen = enhance(HomeScreen);
- export default EnhancedHomeScreen;
+export default HomeScreen;
