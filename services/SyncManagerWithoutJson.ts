@@ -131,7 +131,7 @@ export const SyncManager = {
 
     // 1. UNPACK: Parse the blob to get the real JSON payload for Supabase
     const rawPayload = task.parsed;
-    const { _id: _, ...cleanPayload } = rawPayload;
+    const { _id, ...cleanPayload } = rawPayload;
 
     // 2. SEND: Insert into Supabase
     const { data, error } = await supabase
@@ -162,13 +162,12 @@ export const SyncManager = {
 
   async handleUpdate(realm: Realm, task: JsonBlobTask) {
     // 1. UNPACK
-    const rawPayload = task.parsed;
-    const { _id: _, ...cleanPayload } = rawPayload;
+    const payload = task.parsed;
 
     // 2. SEND
     const { error } = await supabase
       .from(REMOTE_TABLE_NAME)
-      .update({ json: cleanPayload })
+      .update({ json: payload })
       .eq("id", task._id);
 
     if (error) throw error;

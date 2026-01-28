@@ -1,5 +1,5 @@
 import { useQuery, useRealm } from "@/db/realm";
-import { JsonTask } from "@/db/realm/schemas/Json/Task";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
 import { SyncManager } from "@/services/SyncManager";
 import { pushSingleTaskById } from "@/utils/syncQueue";
 import { Stack, useRouter } from "expo-router";
@@ -77,7 +77,7 @@ const StatusBadge: FC<{ status: string }> = ({ status }) => {
 
 // Task card component
 const SyncTaskCard: FC<{
-  task: JsonTask;
+  task: JsonBlobTask;
   onRetry: (taskId: string) => void;
   isRetrying: boolean;
 }> = ({ task, onRetry, isRetrying }) => {
@@ -98,7 +98,7 @@ const SyncTaskCard: FC<{
     <View style={styles.taskCard}>
       <View style={styles.taskHeader}>
         <Text style={styles.taskTitle} numberOfLines={2}>
-          {task.title}
+          {task.parsed.title}
         </Text>
         <StatusBadge status={task.sync_status} />
       </View>
@@ -185,11 +185,8 @@ const SyncScreen: FC = () => {
   } | null>(null);
 
   // Get pending tasks from Realm (live query)
-  const tasksQuery = useQuery<JsonTask>(JsonTask).filtered(
-    "sync_status == $0 OR sync_status == $1 OR sync_status == $2",
-    "pending_creation",
-    "pending_update",
-    "sync_error",
+  const tasksQuery = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
+    "sync_status != 'synced'",
   );
 
   const tasks = useMemo(() => Array.from(tasksQuery), [tasksQuery]);
@@ -267,7 +264,7 @@ const SyncScreen: FC = () => {
   }, []);
 
   const renderItem = useCallback(
-    ({ item }: { item: JsonTask }) => (
+    ({ item }: { item: JsonBlobTask }) => (
       <SyncTaskCard
         task={item}
         onRetry={handleRetry}

@@ -3,8 +3,7 @@ import HomeHeader from "@/components/HomeHeader";
 import SyncLoadingBar from "@/components/SyncLoadingBar";
 import { updateTaskWithSyncStatus } from "@/db/queries/taskApi";
 import { useQuery, useRealm } from "@/db/realm";
-import { JsonTask } from "@/db/realm/schemas/Json/Task";
-import { Task } from "@/db/realm/schemas/Task";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
 import { SyncManager } from "@/services/SyncManager";
 import { useRouter } from "expo-router";
 import { Plus } from "lucide-react-native";
@@ -23,7 +22,7 @@ const HomeScreen = () => {
   const realm = useRealm();
 
   // Get all tasks from Realm (live query)
-  const tasks = useQuery<JsonTask>(JsonTask).filtered(
+  const tasks = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
     "sync_status != 'pending_delete'",
   );
 
@@ -78,10 +77,10 @@ const HomeScreen = () => {
     }
   };
 
-  const handleToggleTask = async (task: JsonTask) => {
-    const newStatus = !task.is_completed;
+  const handleToggleTask = async (task: JsonBlobTask) => {
+    const newStatus = !task.parsed.is_completed;
 
-    await updateTaskWithSyncStatus(realm, task, {
+    updateTaskWithSyncStatus(realm, task, {
       is_completed: newStatus,
     });
 
@@ -91,8 +90,10 @@ const HomeScreen = () => {
   const filteredTasks = useMemo(() => {
     const tasksArray = Array.from(tasks);
     if (filter === "All Tasks") return tasksArray;
-    if (filter === "Ongoing") return tasksArray.filter((t) => !t.is_completed);
-    if (filter === "Completed") return tasksArray.filter((t) => t.is_completed);
+    if (filter === "Ongoing")
+      return tasksArray.filter((t) => !t.parsed.is_completed);
+    if (filter === "Completed")
+      return tasksArray.filter((t) => t.parsed.is_completed);
     return tasksArray;
   }, [tasks, filter]);
 
@@ -100,29 +101,39 @@ const HomeScreen = () => {
     const tasksArray = Array.from(tasks);
     return {
       all: tasksArray.length,
-      ongoing: tasksArray.filter((t) => !t.is_completed).length,
-      completed: tasksArray.filter((t) => t.is_completed).length,
+      ongoing: tasksArray.filter((t) => !t.parsed.is_completed).length,
+      completed: tasksArray.filter((t) => t.parsed.is_completed).length,
     };
   }, [tasks]);
 
-  const renderItem = ({ item, index }: { item: Task; index: number }) => {
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: JsonBlobTask;
+    index: number;
+  }) => {
     return (
       <Animated.View
         entering={FadeInDown.delay(index * 100).springify()}
         layout={FadeInDown.springify()}
       >
         <TaskCard
-          title={item.title}
-          description={item.description ?? ""}
-          isCompleted={item.is_completed}
-          priority={item.priority as Priority}
-          commentsCount={item.commentsCount ?? item.comments?.length ?? 0}
-          mediaCount={item.mediaCount ?? item.media?.length ?? 0}
+          title={item.parsed.title}
+          description={item.parsed.description ?? ""}
+          isCompleted={item.parsed.is_completed}
+          priority={item.parsed.priority as Priority}
+          commentsCount={0}
+          mediaCount={0}
           createdAt={
-            item.created_at ? new Date(item.created_at).getTime() : undefined
+            item.parsed.created_at
+              ? new Date(item.parsed.created_at).getTime()
+              : undefined
           }
           dueDate={
-            item.due_date ? new Date(item.due_date).getTime() : undefined
+            item.parsed.due_date
+              ? new Date(item.parsed.due_date).getTime()
+              : undefined
           }
           onToggle={() => handleToggleTask(item)}
           onPress={() => router.push(`/edit-task/${item._id}`)}
@@ -137,23 +148,26 @@ const HomeScreen = () => {
     // We negate it to distinguish from real DB IDs.
     const tempId = -Date.now();
 
+    const newTaskJson = {
+      _id: tempId,
+      title: "New Task ",
+      description: "This is a new task",
+      due_date: new Date().toISOString(),
+      is_completed: false,
+      priority: "low",
+      created_at: new Date().toISOString(),
+    };
+
     const newTaskData = {
       _id: tempId,
-      title: "New Task From Local DB",
-      description: "This is a new task from Local DB",
-      due_date: new Date().toISOString(),
-      is_completed: true,
-      priority: "high",
-      created_at: new Date().toISOString(),
-      images: [],
-      media_count: 0,
-      comments_count: 0,
+      json_blob: JSON.stringify(newTaskJson),
       sync_status: "pending_creation",
+      sync_error_details: undefined,
     };
 
     // 1. Optimistic Save (Instant UI update)
     realm.write(() => {
-      realm.create("JsonTask", newTaskData);
+      realm.create("JsonBlobTask", newTaskData);
     });
 
     // 2. Trigger Sync Background Process
@@ -219,8 +233,8 @@ const HomeScreen = () => {
       <Toast message={toastMessage} visible={toastVisible} />
 
       <PressableScale
-        // onPress={() => router.push("/create-task")}
-        onPress={handleCreateTask}
+        onPress={() => router.push("/create-task")}
+        // onPress={handleCreateTask}
         style={{
           position: "absolute",
           bottom: 110,

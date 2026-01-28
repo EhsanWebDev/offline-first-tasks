@@ -1,5 +1,6 @@
 import { createRealmContext } from "@realm/react";
 import Realm from "realm";
+import { JsonBlobTask } from "./schemas/Json/JsonTask";
 import { JsonTask } from "./schemas/Json/Task";
 import { SyncState } from "./schemas/SyncState";
 import { Task } from "./schemas/Task";
@@ -9,6 +10,7 @@ import { TaskMediaEmbedded } from "./schemas/TaskMediaEmbedded";
 // Export schema classes for use in RealmProvider
 export const realmSchemas = [
   JsonTask,
+  JsonBlobTask,
   Task,
   TaskCommentEmbedded,
   TaskMediaEmbedded,

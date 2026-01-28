@@ -1,8 +1,8 @@
 import PriorityBar from "@/components/PriorityBar";
 import AppInput from "@/components/TextInput/AppInput";
 import { createTask } from "@/db/queries/taskApi";
+import { useRealm } from "@/db/realm";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useRealm } from "@realm/react";
 import { useRouter } from "expo-router";
 import { Calendar, ChevronLeft, Plus, X } from "lucide-react-native";
 import { PressableScale } from "pressto";
@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Priority } from "../components/PriorityTag";
-import { formatDate } from "../utils/dateHelpers";
+import dayjs, { formatDate } from "../utils/dateHelpers";
 
 export default function CreateTaskScreen() {
   const router = useRouter();
@@ -46,35 +46,15 @@ export default function CreateTaskScreen() {
 
     try {
       setIsPending(true);
-      await createTask(realm, {
+      createTask(realm, {
         title: title.trim(),
         description: description.trim(),
         priority: priority,
-        due_date: dueDate ? dueDate.getTime() : 0,
+        due_date: dueDate ? dayjs(dueDate).format() : undefined,
         is_completed: false,
-        created_at: new Date().getTime(),
       });
       router.back();
-      
-      // createTaskMutation(
-      //   {
-      //     title: title.trim(),
-      //     description: description.trim(),
-      //     priority: priority as "low" | "medium" | "high",
-      //     due_date: dueDate ? dueDate.toISOString() : undefined,
-      //   },
-      //   {
-      //     onSuccess: () => {
-      //       router.back();
-      //     },
-      //     onError: (error) => {
-      //       console.error(error);
-      //       Alert.alert("Error", (error as Error).message);
-      //     },
-      //   }
-      // );
     } catch (error) {
-      console.error(error);
       Alert.alert("Error", (error as Error).message);
     } finally {
       setIsPending(false);

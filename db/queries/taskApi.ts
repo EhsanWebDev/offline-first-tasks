@@ -1,8 +1,8 @@
 import { Priority } from "@/api/types/tasks";
+import dayjs from "dayjs";
 import Realm from "realm";
-import { v4 as uuidv4 } from "uuid";
-import { JsonTask } from "../realm/schemas/Json/Task";
-import { SyncStatus, Task } from "../realm/schemas/Task";
+import { JsonBlobTask, TaskPayload } from "../realm/schemas/Json/JsonTask";
+import { Task } from "../realm/schemas/Task";
 
 export type TaskType = {
   title: string;
@@ -41,36 +41,50 @@ export const getTaskById = (realm: Realm, id: string): Task | null => {
   );
 };
 
-export const createTask = async (
+export const createTask = (
   realm: Realm,
-  newTask: TaskType,
-): Promise<Task> => {
-  const now = new Date();
-  const taskId = uuidv4();
+  formData: Omit<
+    TaskPayload,
+    "created_at" | "comments" | "media" | "_id" | "sync_status"
+  >, // Omit auto-fields
+): JsonBlobTask => {
+  // 1. Generate Temporal ID (Negative Integer)
+  // This ensures no collision with Supabase IDs (which are positive)
+  const tempId = -Date.now();
 
-  let createdTask: Task = undefined as unknown as Task;
+  // 2. Prepare the full payload
+  const fullPayload: TaskPayload = {
+    _id: tempId,
+    sync_status: "pending_creation",
+
+    // Convert Dates to Strings for JSON storage
+    created_at: dayjs().format(),
+    due_date: formData.due_date ? dayjs(formData.due_date).format() : undefined,
+
+    // Initialize Defaults
+    images: [],
+    // Add any other specific fields for your blob here
+
+    ...formData,
+  };
+
+  let newTask: JsonBlobTask;
+
+  // 3. Write to Realm (Synchronous)
   realm.write(() => {
-    createdTask = realm.create<Task>("Task", {
-      _id: new Realm.BSON.ObjectId(),
-      id: taskId,
-      title: newTask.title,
-      description: newTask.description || undefined,
-      due_date: newTask.due_date ? new Date(newTask.due_date) : undefined,
-      is_completed: newTask.is_completed,
-      priority: newTask.priority,
-      created_at: newTask.created_at ? new Date(newTask.created_at) : now,
-      updated_at: now,
-      sync_status: SyncStatus.PENDING_CREATION,
-      sync_error_message: undefined,
-      serverId: undefined,
-      comments: [],
-      media: [],
-      commentsCount: 0,
-      mediaCount: 0,
+    newTask = realm.create<JsonBlobTask>("JsonBlobTask", {
+      _id: tempId,
+
+      // THE IMPORTANT PART: Pack everything into the string
+      json_blob: JSON.stringify(fullPayload),
+
+      sync_status: "pending_creation",
+      sync_error_details: undefined,
     });
   });
 
-  return createdTask;
+  // @ts-ignore - newTask is assigned inside write block
+  return newTask;
 };
 
 /**
@@ -78,67 +92,69 @@ export const createTask = async (
  * If the task is pending_creation, it stays that way (still needs POST).
  * Otherwise, it becomes pending_update.
  */
-export const updateTaskWithSyncStatus = async (
+
+export const updateTaskWithSyncStatus = (
   realm: Realm,
-  task: JsonTask,
-  updates: Partial<
-    Pick<
-      JsonTask,
-      "title" | "description" | "due_date" | "is_completed" | "priority"
-    >
-  >,
-): Promise<void> => {
+  task: JsonBlobTask, // Input must be the Realm Object, not the raw interface
+  updates: Partial<TaskPayload>,
+): void => {
+  // realm.write is synchronous, so we remove async/Promise
+
   realm.write(() => {
-    // --- STATE MACHINE LOGIC ---
+    // --- 1. STATE MACHINE LOGIC ---
 
-    // 1. Is this a retry of a failed item?
+    // Recovery: If it was an error, reset status based on ID type (Temp vs Real)
     if (task.sync_status === "sync_error") {
-      // Recovery logic:
-      // If ID is temp (-1), go back to creation queue.
-      // If ID is real (50), go back to update queue.
       task.sync_status = task._id < 0 ? "pending_creation" : "pending_update";
-
-      // Clear the error message since we are retrying
       task.sync_error_details = undefined;
     }
-
-    // 2. Is this a standard update?
-    // If it's ALREADY 'pending_creation', we leave it alone (it's still a draft).
-    // If it's 'synced' or 'pending_update', we ensure it's marked 'pending_update'.
+    // Standard Update: If currently 'synced', move to 'pending_update'.
+    // If 'pending_creation', keep it there (it hasn't left the device yet).
     else if (task.sync_status !== "pending_creation") {
       task.sync_status = "pending_update";
     }
 
-    // --- APPLY DATA UPDATES ---
+    // --- 2. DATA UPDATE LOGIC (The Blob Strategy) ---
 
+    // A. Unpack: Parse existing data from the blob
+    let currentPayload: TaskPayload;
+    try {
+      currentPayload = JSON.parse(task.json_blob);
+    } catch (e) {
+      console.error("Critical: Failed to parse task blob for update", e);
+      return; // Abort if data is corrupted
+    }
+
+    // B. Modify: Apply updates to the plain JavaScript object
     Object.entries(updates).forEach(([key, value]) => {
-      if (value === undefined) return; // Skip undefined updates
+      if (value === undefined) return;
 
-      // Handle specific date transformation logic
       if (key === "due_date") {
-        task.due_date = value
+        currentPayload.due_date = value
           ? new Date(value as string).toISOString()
           : undefined;
-      }
-      // Handle all other fields directly
-      else {
-        // @ts-ignore: Dynamic assignment is safe here due to strict input types
-        task[key] = value;
+      } else {
+        // @ts-ignore: Key is guaranteed valid by Partial<TaskPayload>
+        currentPayload[key] = value;
       }
     });
+
+    // C. Repack: Stringify and save back to Realm
+    task.json_blob = JSON.stringify(currentPayload);
   });
 };
 
-export const deleteTask = async (
+// Remove 'async' and 'Promise'
+export const deleteTask = (
   realm: Realm,
-  task: JsonTask,
-): Promise<void> => {
+  task: JsonBlobTask, // Ensure this uses your JsonTask class
+): void => {
   realm.write(() => {
     if (task.sync_status === "pending_creation") {
-      // It never existed on server, just kill it.
+      // Case 1: Local draft (never sent to server) -> Kill it.
       realm.delete(task);
     } else {
-      // It exists on server, mark for deletion request.
+      // Case 2: Exists on server -> Mark for Soft Delete.
       task.sync_status = "pending_delete";
     }
   });

@@ -1,5 +1,5 @@
 import { useQuery } from "@/db/realm";
-import { JsonTask } from "@/db/realm/schemas/Json/Task";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
 import { useRouter } from "expo-router";
 import { ChevronRight, Cloud, Upload } from "lucide-react-native";
 import { FC, useMemo } from "react";
@@ -10,7 +10,7 @@ const MoreScreen: FC = () => {
   const router = useRouter();
 
   // Get pending tasks count from Realm
-  const pendingTasks = useQuery<JsonTask>(JsonTask).filtered(
+  const pendingTasks = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
     "sync_status == $0 OR sync_status == $1 OR sync_status == $2",
     "pending_creation",
     "pending_update",

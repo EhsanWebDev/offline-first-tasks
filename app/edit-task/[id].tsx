@@ -4,8 +4,8 @@ import { Priority } from "@/components/PriorityTag";
 import AppInput from "@/components/TextInput/AppInput";
 import { deleteTask, updateTaskWithSyncStatus } from "@/db/queries/taskApi";
 import { useQuery, useRealm } from "@/db/realm";
-import { JsonTask } from "@/db/realm/schemas/Json/Task";
-import { formatDate } from "@/utils/dateHelpers";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
+import dayjs, { formatDate } from "@/utils/dateHelpers";
 import {
   deleteImageFromSupabase,
   uploadImageToSupabase,
@@ -55,7 +55,10 @@ const EditTaskScreen = () => {
   }>({});
 
   // Get task from Realm (live query)
-  const taskQuery = useQuery<JsonTask>(JsonTask).filtered("_id == $0", id);
+  const taskQuery = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
+    "_id == $0",
+    id,
+  );
   const theTask = taskQuery.length > 0 ? taskQuery[0] : null;
 
   // Get comments and media from embedded arrays
@@ -69,29 +72,31 @@ const EditTaskScreen = () => {
 
   useEffect(() => {
     if (theTask) {
-      setTitle(theTask.title || "");
-      setDescription(theTask.description || "");
-      setPriority((theTask.priority as Priority) || "medium");
+      setTitle(theTask.parsed.title || "");
+      setDescription(theTask.parsed.description || "");
+      setPriority((theTask.parsed.priority as Priority) || "medium");
       setDueDate(
-        theTask.due_date ? new Date(theTask.due_date).getTime() : null,
+        theTask.parsed.due_date
+          ? new Date(theTask.parsed.due_date).getTime()
+          : null,
       );
     }
   }, [theTask]);
 
   // Extract is_completed to preserve it during update
-  const is_completed = theTask?.is_completed ?? false;
+  const is_completed = theTask?.parsed?.is_completed ?? false;
 
   const handleUpdate = async () => {
     if (!theTask) return;
 
     setIsLoading(true);
     setIsPending(true);
-    await updateTaskWithSyncStatus(realm, theTask, {
+    updateTaskWithSyncStatus(realm, theTask, {
       title: title.trim(),
       description: description?.trim(),
       priority: priority,
-      due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
-      is_completed: is_completed,
+      due_date: dueDate ? dayjs(dueDate).format() : undefined,
+      is_completed,
     });
     setIsLoading(false);
     setIsPending(false);

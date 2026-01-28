@@ -1,23 +1,19 @@
 import { SyncStatusPanel } from "@/components/SyncStatusPanel";
 import { useQuery } from "@/db/realm";
-import { JsonTask, SyncStatus } from "@/db/realm/schemas/Json/Task";
+import { JsonBlobTask, SyncStatus } from "@/db/realm/schemas/Json/JsonTask";
 import { Stack } from "expo-router";
 import React from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function DbItems() {
-  // 1. Fetch ALL data directly from Realm
-  // We sort by _id to see the negative ones (newest local) vs positive (synced) clearly
-  // const tasks = useQuery<JsonTask>(JsonTask).sorted("_id");
-  const tasks = useQuery(JsonTask).sorted("sync_status");
+  const tasks = useQuery<JsonBlobTask>(JsonBlobTask).sorted("_id");
 
   return (
     <SafeAreaView
       className="flex-1 bg-gray-50"
       edges={["top", "left", "right"]}
     >
-      {/* Configure the Header */}
       <Stack.Screen options={{ title: "Local DB Inspector" }} />
 
       <View className="flex-1">
@@ -41,7 +37,7 @@ export default function DbItems() {
 }
 
 // Helper Component to render a single row
-const DbRow = ({ task }: { task: JsonTask }) => {
+const DbRow = ({ task }: { task: JsonBlobTask }) => {
   const statusColors: Record<SyncStatus, string> = {
     synced: "#dcfce7", // Green
     pending_creation: "#e0f2fe", // Blue
@@ -50,9 +46,11 @@ const DbRow = ({ task }: { task: JsonTask }) => {
     sync_error: "#7f1d1d", // Dark Red
   };
   const bgStyle = {
-    backgroundColor: statusColors[task.sync_status] || "#fff",
+    backgroundColor: statusColors[task.sync_status as SyncStatus] || "#fff",
     borderColor: task.sync_status === "sync_error" ? "red" : "transparent",
   };
+
+  const taskParsed = task.parsed;
 
   const isError = task.sync_status === "sync_error";
 
@@ -76,25 +74,30 @@ const DbRow = ({ task }: { task: JsonTask }) => {
         <Text style={styles.statusBadge}>{statusText}</Text>
       </View>
 
-      <Text style={styles.title}>Title: {task.title}</Text>
-      <Text style={styles.subText}>Priority: {task.priority}</Text>
+      <Text style={styles.title}>Title: {taskParsed.title}</Text>
+      <Text style={styles.subText}>Priority: {taskParsed.priority}</Text>
 
       {/* Show raw JSON-like data for debugging */}
-      <View style={styles.codeBlock}>
-        <Text style={styles.codeText}>
-          {JSON.stringify(
-            {
-              description: task.description,
-              due_date: task.due_date,
-              completed: task.is_completed,
-              created: task.created_at,
-              images: task?.images?.length ?? 0,
-            },
-            null,
-            2,
-          )}
-        </Text>
-      </View>
+
+      {isError ? (
+        <Text style={styles.errorText}>{task.sync_error_details}</Text>
+      ) : (
+        <View style={styles.codeBlock}>
+          <Text style={styles.codeText}>
+            {JSON.stringify(
+              {
+                description: taskParsed.description,
+                due_date: taskParsed.due_date,
+                completed: taskParsed?.is_completed,
+                created: taskParsed.created_at,
+                images: taskParsed?.images?.length ?? 0,
+              },
+              null,
+              4,
+            )}
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -140,6 +143,7 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 6,
   },
+  errorText: { fontSize: 12, color: "red", marginBottom: 8 },
   codeText: {
     fontSize: 12,
     // fontFamily: "Courier New"
