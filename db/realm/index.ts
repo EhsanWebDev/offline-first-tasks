@@ -52,7 +52,7 @@ const realmConfig = {
   schema: realmSchemas,
 
   // 1. INCREMENT THIS VERSION (e.g. if it was 1, make it 2)
-  schemaVersion: 1,
+  schemaVersion: 2,
 
   // // 2. Define how to update old data to new structure
   // onMigration: (oldRealm: Realm, newRealm: Realm) => {

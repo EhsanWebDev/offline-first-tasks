@@ -62,9 +62,8 @@ const EditTaskScreen = () => {
   const theTask = taskQuery.length > 0 ? taskQuery[0] : null;
 
   // Get comments and media from embedded arrays
-  const commentsCount =
-    theTask?.commentsCount ?? theTask?.comments?.length ?? 0;
-  const mediaCount = theTask?.mediaCount ?? theTask?.media?.length ?? 0;
+  const commentsCount = theTask?.parsed.comments?.length ?? 0;
+  const mediaCount = theTask?.parsed.media?.length ?? 0;
   const hasComments = commentsCount > 0;
   const hasMedia = mediaCount > 0;
 

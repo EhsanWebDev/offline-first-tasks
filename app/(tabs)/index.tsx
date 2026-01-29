@@ -123,8 +123,8 @@ const HomeScreen = () => {
           description={item.parsed.description ?? ""}
           isCompleted={item.parsed.is_completed}
           priority={item.parsed.priority as Priority}
-          commentsCount={0}
-          mediaCount={0}
+          commentsCount={item.parsed.comments?.length ?? 0}
+          mediaCount={item.parsed.media?.length ?? 0}
           createdAt={
             item.parsed.created_at
               ? new Date(item.parsed.created_at).getTime()

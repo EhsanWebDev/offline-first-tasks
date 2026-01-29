@@ -1,7 +1,12 @@
 import { Priority } from "@/api/types/tasks";
 import dayjs from "dayjs";
 import Realm from "realm";
-import { JsonBlobTask, TaskPayload } from "../realm/schemas/Json/JsonTask";
+import {
+  JsonBlobTask,
+  TaskCommentPayload,
+  TaskMediaPayload,
+  TaskPayload,
+} from "../realm/schemas/Json/JsonTask";
 import { Task } from "../realm/schemas/Task";
 
 export type TaskType = {
@@ -86,13 +91,70 @@ export const createTask = (
   // @ts-ignore - newTask is assigned inside write block
   return newTask;
 };
-
-/**
- * Updates a task and sets the appropriate sync_status.
- * If the task is pending_creation, it stays that way (still needs POST).
- * Otherwise, it becomes pending_update.
- */
-
+export const addCommentToTask = (
+  realm: Realm,
+  task: JsonBlobTask,
+  comment: TaskCommentPayload,
+): void => {
+  realm.write(() => {
+    const rawPayload = task.parsed;
+    const updatedComments = [...(rawPayload.comments || []), comment];
+    task.json_blob = JSON.stringify({
+      ...rawPayload,
+      comments: updatedComments,
+    });
+    task.sync_status = "pending_update";
+  });
+};
+export const addTaskMediaToTask = (
+  realm: Realm,
+  task: JsonBlobTask,
+  media: TaskMediaPayload,
+): void => {
+  realm.write(() => {
+    const rawPayload = task.parsed;
+    const updatedMedia = [...(rawPayload.media || []), media];
+    task.json_blob = JSON.stringify({
+      ...rawPayload,
+      media: updatedMedia,
+    });
+    task.sync_status = "pending_update";
+  });
+};
+export const deleteTaskMediaFromTask = (
+  realm: Realm,
+  task: JsonBlobTask,
+  mediaId: number,
+): void => {
+  realm.write(() => {
+    const rawPayload = task.parsed;
+    const updatedMedia = rawPayload.media?.filter((m) => m._id !== mediaId);
+    if (updatedMedia) {
+      task.json_blob = JSON.stringify({
+        ...rawPayload,
+        media: updatedMedia,
+      });
+      task.sync_status = "pending_update";
+    }
+  });
+};
+export const deleteCommentFromTask = (
+  realm: Realm,
+  task: JsonBlobTask,
+  commentId: number,
+): void => {
+  realm.write(() => {
+    const rawPayload = task.parsed;
+    const updatedComments = rawPayload.comments?.filter(
+      (c) => c._id !== commentId,
+    );
+    task.json_blob = JSON.stringify({
+      ...rawPayload,
+      comments: updatedComments,
+    });
+    task.sync_status = "pending_update";
+  });
+};
 export const updateTaskWithSyncStatus = (
   realm: Realm,
   task: JsonBlobTask, // Input must be the Realm Object, not the raw interface
@@ -143,8 +205,6 @@ export const updateTaskWithSyncStatus = (
     task.json_blob = JSON.stringify(currentPayload);
   });
 };
-
-// Remove 'async' and 'Promise'
 export const deleteTask = (
   realm: Realm,
   task: JsonBlobTask, // Ensure this uses your JsonTask class

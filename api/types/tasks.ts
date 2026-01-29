@@ -21,9 +21,8 @@ export interface TaskRow {
     priority: "low" | "medium" | "high";
     due_date?: string;
     created_at: string;
-    images?: string[];
-    comments_count?: number;
-    media_count?: number;
+    media?: TaskMedia[];
+    comments?: TaskComment[];
   };
 }
 
@@ -37,7 +36,7 @@ export interface TaskComment {
 export interface TaskMedia {
   id: number;
   url: string;
-  type: "image" | "video";
+  type: "image" | "video" | "file";
   created_at: string;
   task_id: number;
 }

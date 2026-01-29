@@ -1,19 +1,20 @@
-import {
-  useCreateTaskMedia,
-  useDeleteTaskMedia,
-} from "@/api/tasks/media/mutations";
-import { useTaskMediaByTaskId } from "@/api/tasks/media/queries";
 import Header from "@/components/AppHeaders/Header";
+import {
+  addTaskMediaToTask,
+  deleteTaskMediaFromTask,
+} from "@/db/queries/taskApi";
+import { useQuery, useRealm } from "@/db/realm";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
 import {
   deleteImageFromSupabase,
   uploadImageToSupabase,
 } from "@/utils/imageUpload";
-import { useQueryClient } from "@tanstack/react-query";
+
+import dayjs from "dayjs";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { ImagePlus, Trash2 } from "lucide-react-native";
-import { PressableScale } from "pressto";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -29,29 +30,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const TaskMedia = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const queryClient = useQueryClient();
+
   const { width } = useWindowDimensions();
 
-  const { data: media, isLoading: isTaskMediaLoading } = useTaskMediaByTaskId(
-    Number(id)
+  const realm = useRealm();
+  const theTaskQuery = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
+    "_id == $0",
+    Number(id),
   );
+  const theTask = theTaskQuery.length > 0 ? theTaskQuery[0] : null;
+  const allMedia = theTask?.parsed.media ?? [];
+  const mediaCount = allMedia.length;
+  const hasMedia = mediaCount > 0;
 
   const [uploading, setUploading] = useState(false);
   const [deletingMediaId, setDeletingMediaId] = useState<number | null>(null);
   const [showFullImage, setShowFullImage] = useState(false);
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null);
 
-  const {
-    mutate: createTaskMediaMutation,
-    isPending: isCreateTaskMediaPending,
-  } = useCreateTaskMedia();
-  const {
-    mutate: deleteTaskMediaMutation,
-    isPending: isDeleteTaskMediaPending,
-  } = useDeleteTaskMedia();
-
   const pickImage = async () => {
-    if (isCreateTaskMediaPending || isDeleteTaskMediaPending) return;
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -79,7 +76,7 @@ const TaskMedia = () => {
   };
 
   const handleUploads = async (
-    assets: ImagePicker.ImagePickerAsset[] | undefined
+    assets: ImagePicker.ImagePickerAsset[] | undefined,
   ) => {
     if (!assets || assets.length === 0) return;
     setUploading(true);
@@ -88,22 +85,15 @@ const TaskMedia = () => {
         // A. Upload to Bucket (using your existing helper)
         const publicUrl = await uploadImageToSupabase(asset.uri);
 
-        // B. Save to new Table
-        createTaskMediaMutation(
-          { taskId: Number(id), url: publicUrl, type: "image" },
-          {
-            onSuccess: () => {
-              queryClient.invalidateQueries({
-                queryKey: ["task-media", Number(id)],
-              });
-              setUploading(false);
-            },
-            onError: (error) => {
-              console.error(error);
-              Alert.alert("Error", (error as Error).message);
-            },
-          }
-        );
+        if (theTask) {
+          addTaskMediaToTask(realm, theTask, {
+            _id: Date.now(),
+            url: publicUrl,
+            type: "image",
+            created_at: dayjs().format(),
+            task_id: Number(theTask?._id ?? 0),
+          });
+        }
       }
     } catch (error) {
       console.error(error);
@@ -125,24 +115,13 @@ const TaskMedia = () => {
         style: "destructive",
         onPress: async () => {
           setDeletingMediaId(mediaId);
-          deleteTaskMediaMutation(
-            { taskId: Number(id), mediaId },
-            {
-              onSuccess: async () => {
-                await handleDeleteMediaFromStorage(image);
-                queryClient.invalidateQueries({
-                  queryKey: ["task-media", Number(id)],
-                });
-                Alert.alert("Media deleted successfully");
-                setDeletingMediaId(null);
-              },
-              onError: (error) => {
-                console.error(error);
-                Alert.alert("Error", (error as Error).message);
-                setDeletingMediaId(null);
-              },
-            }
-          );
+
+          if (theTask) {
+            deleteTaskMediaFromTask(realm, theTask, mediaId);
+            await handleDeleteMediaFromStorage(image);
+            Alert.alert("Media deleted successfully");
+            setDeletingMediaId(null);
+          }
         },
       },
     ]);
@@ -164,22 +143,18 @@ const TaskMedia = () => {
       <Stack.Screen options={{ headerShown: false }} />
 
       <Header title="Task Media" onBackPress={() => router.back()} />
-      {isTaskMediaLoading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="small" color="gray" />
-        </View>
-      ) : media?.length === 0 ? (
+      {!hasMedia ? (
         <View className="flex-1 justify-center items-center">
           <Text className="text-gray-400 text-lg">No media yet</Text>
         </View>
       ) : (
         <View className="flex-1 pt-6 flex-row flex-wrap gap-3 px-4">
-          {(media ?? []).map((item) => (
-            <View key={item.id} style={{ width: itemWidth }}>
+          {allMedia.map((item) => (
+            <View key={item._id} style={{ width: itemWidth }}>
               <MediaItem
                 image={item.url}
-                onDelete={(image) => handleDeleteMedia(item.id, image)}
-                isDeleting={deletingMediaId === item.id}
+                onDelete={(image) => handleDeleteMedia(item._id, image)}
+                isDeleting={deletingMediaId === item._id}
                 onImagePress={() => handleImagePress(item.url)}
               />
             </View>
@@ -211,12 +186,7 @@ const TaskMedia = () => {
       <View className="px-6 pb-6">
         <TouchableOpacity
           onPress={pickImage}
-          disabled={
-            isCreateTaskMediaPending ||
-            isDeleteTaskMediaPending ||
-            uploading ||
-            deletingMediaId !== null
-          }
+          disabled={uploading || deletingMediaId !== null}
           className="flex-row items-center justify-center bg-blue-500 rounded-full p-2"
         >
           <ImagePlus
@@ -250,7 +220,12 @@ const MediaItem = ({
   isDeleting,
 }: MediaItemProps) => {
   return (
-    <PressableScale onPress={onImagePress}>
+    <TouchableOpacity
+      onPress={(e) => {
+        e.stopPropagation();
+        onImagePress();
+      }}
+    >
       <View className="flex-row items-center justify-between relative">
         <Image
           source={{ uri: image }}
@@ -258,7 +233,10 @@ const MediaItem = ({
           contentFit="cover"
         />
         <TouchableOpacity
-          onPress={() => onDelete(image)}
+          onPress={(e) => {
+            e.stopPropagation();
+            onDelete(image);
+          }}
           className="absolute top-0 right-0 bg-white rounded-full p-2"
         >
           {isDeleting ? (
@@ -268,7 +246,7 @@ const MediaItem = ({
           )}
         </TouchableOpacity>
       </View>
-    </PressableScale>
+    </TouchableOpacity>
   );
 };
 

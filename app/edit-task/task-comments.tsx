@@ -3,10 +3,12 @@ import {
   useAddCommentOnTask,
   useDeleteCommentOnTask,
 } from "@/api/tasks/comments/mutations";
-import { useTaskCommentsByTaskId } from "@/api/tasks/comments/queries";
 import Header from "@/components/AppHeaders/Header";
 import Toast from "@/components/Toast";
-import { formatDate } from "@/utils/dateHelpers";
+import { addCommentToTask, deleteCommentFromTask } from "@/db/queries/taskApi";
+import { useQuery, useRealm } from "@/db/realm";
+import { JsonBlobTask } from "@/db/realm/schemas/Json/JsonTask";
+import dayjs, { formatDate } from "@/utils/dateHelpers";
 import {
   RelativePathString,
   router,
@@ -19,7 +21,6 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -31,12 +32,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const TaskComments = () => {
   const router = useRouter();
+  const realm = useRealm();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const {
-    data: comments,
-    isLoading: isCommentsLoading,
-    refetch: refetchComments,
-  } = useTaskCommentsByTaskId(Number(id));
+  // const {
+  //   data: comments,
+  //   isLoading: isCommentsLoading,
+  //   refetch: refetchComments,
+  // } = useTaskCommentsByTaskId(Number(id));
+
+  const taskQuery = useQuery<JsonBlobTask>(JsonBlobTask).filtered(
+    "_id == $0",
+    Number(id),
+  );
+  const theTask = taskQuery.length > 0 ? taskQuery[0] : null;
+  const allComments = theTask?.parsed.comments ?? [];
+  const commentsCount = allComments.length;
+  const hasComments = commentsCount > 0;
+
+  console.log({ taskQuery: JSON.stringify(taskQuery, null, 2) });
+
   const { mutate: addCommentMutation, isPending: isAddingComment } =
     useAddCommentOnTask();
   const { mutate: deleteCommentMutation, isPending: isDeletingComment } =
@@ -46,17 +60,17 @@ const TaskComments = () => {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
 
-  if (isCommentsLoading) {
-    return (
-      <SafeAreaView className="flex-1">
-        <Stack.Screen options={{ headerShown: false }} />
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#4F46E5" />
-          <Text className="text-gray-400 text-lg">Loading comments...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // if (isCommentsLoading) {
+  //   return (
+  //     <SafeAreaView className="flex-1">
+  //       <Stack.Screen options={{ headerShown: false }} />
+  //       <View className="flex-1 justify-center items-center">
+  //         <ActivityIndicator size="large" color="#4F46E5" />
+  //         <Text className="text-gray-400 text-lg">Loading comments...</Text>
+  //       </View>
+  //     </SafeAreaView>
+  //   );
+  // }
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -69,35 +83,22 @@ const TaskComments = () => {
       showToast("Please enter a comment");
       return;
     }
-    addCommentMutation(
-      { taskId: Number(id), content: comment },
-      {
-        onSuccess: () => {
-          setComment("");
-          //   Show a toast message that the comment was added successfully
-          showToast("Comment added successfully");
-        },
-        onError: (error) => {
-          console.error(error);
-          //   Show a toast message that the comment was not added
-          showToast("Failed to add comment");
-        },
-      }
-    );
+    if (theTask) {
+      addCommentToTask(realm, theTask, {
+        _id: Date.now(),
+        content: comment,
+        created_at: dayjs().toDate(),
+        task_id: Number(id),
+      });
+    }
+    setComment("");
+    showToast("Comment added successfully");
   };
   const handleDeleteComment = (commentId: number) => {
-    deleteCommentMutation(
-      { taskId: Number(id), commentId },
-      {
-        onSuccess: () => {
-          showToast("Comment deleted successfully");
-        },
-        onError: (error) => {
-          console.error(error);
-          showToast("Failed to delete comment");
-        },
-      }
-    );
+    if (theTask) {
+      deleteCommentFromTask(realm, theTask, commentId);
+    }
+    showToast("Comment deleted successfully");
   };
   return (
     <View className="flex-1 bg-white">
@@ -107,17 +108,9 @@ const TaskComments = () => {
         <KeyboardAvoidingView behavior="padding" className="flex-1">
           <ScrollView
             className="flex-1 px-6 pt-6"
-            refreshControl={
-              <RefreshControl
-                refreshing={isCommentsLoading}
-                onRefresh={refetchComments}
-                tintColor="#4F46E5"
-                colors={["#4F46E5"]}
-              />
-            }
             showsVerticalScrollIndicator={false}
           >
-            {comments?.length === 0 ? (
+            {allComments.length === 0 ? (
               <View className="flex-1 justify-center items-center">
                 <Text className="text-gray-400 text-lg">No comments yet</Text>
               </View>
@@ -126,12 +119,12 @@ const TaskComments = () => {
                 <Text className="text-sm font-bold text-gray-900 mb-2 uppercase tracking-wide">
                   Comments
                 </Text>
-                {comments?.map((comment) => (
+                {allComments.map((comment) => (
                   <CommentItem
-                    key={comment.id}
+                    key={comment._id}
                     comment={comment.content}
-                    createdAt={comment.created_at}
-                    commentId={comment.id}
+                    createdAt={comment.created_at as string}
+                    commentId={comment._id}
                     onDeleteComment={(commentId) =>
                       handleDeleteComment(commentId)
                     }
@@ -219,7 +212,7 @@ const CommentItem = ({
             onDeleteComment(commentId);
           },
         },
-      ]
+      ],
     );
   };
   return (

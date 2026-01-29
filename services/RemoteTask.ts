@@ -19,7 +19,8 @@ export const RemoteTaskService = {
       _id: row.id,
       ...row.json,
       // Ensure arrays are initialized even if null in JSON
-      images: row.json.images || [],
+      media: row.json.media || [],
+      comments: row.json.comments || [],
     }));
   },
 };

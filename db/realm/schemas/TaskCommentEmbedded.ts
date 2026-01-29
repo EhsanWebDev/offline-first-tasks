@@ -1,19 +1,19 @@
 import { Realm } from "realm";
 
 export class TaskCommentEmbedded extends Realm.Object<TaskCommentEmbedded> {
-  id!: string;
+  _id!: number;
   content!: string;
   created_at!: Date;
-  task_id!: string;
+  task_id!: number;
 
   static schema: Realm.ObjectSchema = {
     name: "TaskCommentEmbedded",
     embedded: true,
     properties: {
-      id: "string",
+      _id: "int",
       content: "string",
       created_at: "date",
-      task_id: "string",
+      task_id: "int",
     },
   };
 }
